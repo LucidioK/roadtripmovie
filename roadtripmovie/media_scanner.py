@@ -46,7 +46,7 @@ def scan_media(folder: Path) -> list[MediaItem]:
         try:
             item = _resolve_item(path)
         except Exception as exc:
-            print(f"Warning: skipping unreadable file {path}: {exc}", file=sys.stderr)
+            print(f"Warning: skipping unreadable file {path}: {exc} \n {exc.__traceback__}", file=sys.stderr)
             continue
         if item is None:
             continue

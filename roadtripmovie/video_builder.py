@@ -1,16 +1,24 @@
-"""Build per-item video segments, composite the map inset, concatenate, and mix in background music."""
+"""Build per-item video segments, composite the map inset, write each to its own file, then
+concatenate the files on disk and mix in background music.
 
+Segments are written to disk one at a time (instead of being kept open as clip objects in a
+list) so that a large trip folder never requires holding every photo/video in memory or as an
+open decoder at once - only the single segment currently being processed.
+"""
+
+import subprocess
 from pathlib import Path
 from typing import Optional
 
+import imageio_ffmpeg
 import numpy as np
 from moviepy import (
+    AudioClip,
     AudioFileClip,
     CompositeAudioClip,
     CompositeVideoClip,
     ImageClip,
     VideoFileClip,
-    concatenate_videoclips,
 )
 from moviepy.audio.fx import AudioLoop
 from PIL import Image, ImageOps
@@ -19,6 +27,7 @@ from . import map_thumbnail
 from .media_scanner import MediaItem
 
 MAP_MARGIN = 20
+AUDIO_FPS = 44100
 
 
 def _load_photo_array(path: str, target_w: int, target_h: int) -> np.ndarray:
@@ -63,6 +72,22 @@ def _map_overlay_clip(
     return overlay.with_position((target_w - map_width - MAP_MARGIN, MAP_MARGIN))
 
 
+def _silent_audio_clip(duration: float, fps: int = AUDIO_FPS) -> AudioClip:
+    """A silent stereo audio track, used so every segment file has an audio stream.
+
+    ffmpeg's concat demuxer (used to join segment files on disk) requires every input to have
+    the same stream layout, so photo segments (which have no audio) need a silent placeholder
+    to line up with video segments that do.
+    """
+
+    def make_frame(t):
+        if np.isscalar(t):
+            return np.zeros(2)
+        return np.zeros((len(t), 2))
+
+    return AudioClip(make_frame, duration=duration, fps=fps)
+
+
 def build_segment(
     item: MediaItem,
     photo_duration: float,
@@ -95,11 +120,54 @@ def build_segment(
         )
         segment = CompositeVideoClip([segment, overlay], size=(target_w, target_h))
 
+    if segment.audio is None:
+        segment = segment.with_audio(_silent_audio_clip(segment.duration))
+
     return segment
 
 
-def concatenate_all(segments: list):
-    return concatenate_videoclips(segments, method="compose")
+def write_segment(segment, output_path: Path, fps: int) -> None:
+    """Render one segment to its own file, so its frames/audio never have to coexist with any other segment's."""
+    segment.write_videofile(
+        str(output_path),
+        fps=fps,
+        codec="libx264",
+        audio_codec="aac",
+        audio_fps=AUDIO_FPS,
+        logger=None,
+    )
+    segment.close()
+
+
+def concatenate_video_files(file_paths: list[Path], output_path: Path) -> None:
+    """Join already-rendered segment files with ffmpeg's concat demuxer (stream copy, no re-encode).
+
+    Unlike concatenate_videoclips, this never has more than one segment's worth of encoded frames
+    open at a time - ffmpeg streams the existing files straight into the joined output.
+    """
+    list_file = output_path.with_suffix(".txt")
+    with open(list_file, "w", encoding="utf-8") as f:
+        for path in file_paths:
+            escaped = path.resolve().as_posix().replace("'", "'\\''")
+            f.write(f"file '{escaped}'\n")
+
+    try:
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        subprocess.run(
+            [
+                ffmpeg_exe,
+                "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", str(list_file),
+                "-c", "copy",
+                str(output_path),
+            ],
+            check=True,
+            capture_output=True,
+        )
+    finally:
+        list_file.unlink(missing_ok=True)
 
 
 def mix_background_music(video_clip, music_path: str, music_volume: float):
