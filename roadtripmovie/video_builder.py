@@ -171,9 +171,19 @@ def concatenate_video_files(file_paths: list[Path], output_path: Path) -> None:
 
 
 def mix_background_music(video_clip, music_path: str, music_volume: float):
-    """Loop/trim background music to the video's total duration and mix with any existing segment audio."""
+    """Loop/trim background music to the video's total duration and mix with any existing segment audio.
+
+    Returns the mixed clip together with the original ``music_source`` AudioFileClip. The mixed
+    clip's audio is a CompositeAudioClip, and CompositeAudioClip.close() does not close its
+    sub-clips - so ``video_clip.audio``'s reader must be closed explicitly by the caller. The
+    looped/trimmed ``music`` clip is a plain AudioClip rebuilt by AudioLoop's concatenate_audioclips
+    (it has no ``.reader`` of its own), so ``music_source`` - the AudioFileClip actually holding the
+    open file - must be kept and closed separately, or ffmpeg keeps the music file open (e.g.
+    blocking deletion on Windows).
+    """
     total_duration = video_clip.duration
-    music = AudioFileClip(music_path).with_effects([AudioLoop(duration=total_duration)])
+    music_source = AudioFileClip(music_path)
+    music = music_source.with_effects([AudioLoop(duration=total_duration)])
     music = music.subclipped(0, total_duration).with_volume_scaled(music_volume)
 
     if video_clip.audio is not None:
@@ -181,4 +191,4 @@ def mix_background_music(video_clip, music_path: str, music_volume: float):
     else:
         mixed = music
 
-    return video_clip.with_audio(mixed)
+    return video_clip.with_audio(mixed), music_source

@@ -72,9 +72,15 @@ def run(
         video_builder.concatenate_video_files(segment_files, concatenated_path)
 
         print("Mixing background music...")
-        final = VideoFileClip(str(concatenated_path))
-        final = video_builder.mix_background_music(final, str(music_path), music_volume)
+        video_clip = VideoFileClip(str(concatenated_path))
+        final, music_clip = video_builder.mix_background_music(video_clip, str(music_path), music_volume)
 
-        print(f"Writing {output_path}...")
-        final.write_videofile(str(output_path), fps=fps, codec="libx264", audio_codec="aac")
-        final.close()
+        try:
+            print(f"Writing {output_path}...")
+            final.write_videofile(str(output_path), fps=fps, codec="libx264", audio_codec="aac")
+        finally:
+            final.close()
+            if video_clip.audio is not None:
+                video_clip.audio.close()
+            video_clip.close()
+            music_clip.close()
