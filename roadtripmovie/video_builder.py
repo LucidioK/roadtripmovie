@@ -13,11 +13,30 @@ from moviepy import (
     concatenate_videoclips,
 )
 from moviepy.audio.fx import AudioLoop
+from PIL import Image, ImageOps
 
 from . import map_thumbnail
 from .media_scanner import MediaItem
 
 MAP_MARGIN = 20
+
+
+def _load_photo_array(path: str, target_w: int, target_h: int) -> np.ndarray:
+    """Open and downscale a photo to fit the output canvas before it ever reaches moviepy.
+
+    Real photos (12MP+ from a phone/camera) are far larger than the output resolution.
+    ImageClip keeps whatever array it's given alive for the life of the pipeline run, so
+    handing it the full-resolution image for every photo in a large trip folder can exhaust
+    memory well before encoding starts. Resizing here means only a small, canvas-sized array
+    is ever retained.
+    """
+    with Image.open(path) as img:
+        img = ImageOps.exif_transpose(img)  # respect phone/camera orientation metadata
+        img = img.convert("RGB")
+        scale = min(target_w / img.width, target_h / img.height)
+        new_size = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
+        img = img.resize(new_size, Image.LANCZOS)
+        return np.array(img)
 
 
 def _fit_to_canvas(clip, target_w: int, target_h: int):
@@ -59,7 +78,8 @@ def build_segment(
 ):
     """Build a single composited, canvas-fitted segment (with optional map inset) for one media item."""
     if item.kind == "photo":
-        base = ImageClip(str(item.path)).with_duration(photo_duration)
+        array = _load_photo_array(str(item.path), target_w, target_h)
+        base = ImageClip(array).with_duration(photo_duration)
     else:
         base = VideoFileClip(str(item.path))
         if max_video_duration is not None and base.duration > max_video_duration:
