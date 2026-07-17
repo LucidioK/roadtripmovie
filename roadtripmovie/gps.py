@@ -135,7 +135,8 @@ def get_video_location_and_time(path: Path) -> tuple[Optional[LatLon], Optional[
     creation_time = tags.get("creation_time") or tags.get("com.apple.quicktime.creationdate")
     if creation_time:
         try:
-            captured_at = datetime.fromisoformat(creation_time.replace("Z", "+00:00"))
+            parsed = datetime.fromisoformat(creation_time.replace("Z", "+00:00"))
+            captured_at = parsed.replace(tzinfo=None)  # normalize to naive, matching EXIF/mtime timestamps
         except ValueError:
             captured_at = None
 
