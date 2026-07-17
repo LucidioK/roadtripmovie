@@ -1,0 +1,5 @@
+moviepy>=2.1
+Pillow
+pillow-heif
+staticmap
+requests
