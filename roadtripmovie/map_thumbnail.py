@@ -30,6 +30,7 @@ def render_map(
     if cache_file.exists():
         return Image.open(cache_file).convert("RGB")
 
+    print(cache_file)
     static_map = StaticMap(width, height, headers={"User-Agent": USER_AGENT})
     static_map.add_marker(CircleMarker((lon, lat), MARKER_COLOR, 10))
     image = static_map.render(zoom=zoom, center=(lon, lat))

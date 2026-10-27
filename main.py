@@ -1,6 +1,8 @@
 """CLI entry point: build a road trip movie from a folder of photos/videos and a music track."""
 
 import argparse
+import platform
+
 from pathlib import Path
 
 from roadtripmovie import pipeline
@@ -19,6 +21,20 @@ def main():
         description="Create a road trip movie from a folder of photos/videos, "
         "a background music track, and per-item location map insets."
     )
+
+    current_os = platform.system()
+    if current_os == "Windows":
+        print("Running on Windows")
+        font = "C:/Windows/Fonts/arial.ttf"
+    elif current_os == "Linux":
+        print("Running on Linux")
+        font = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    elif current_os == "Darwin":
+        print("Running on macOS")
+        font = "/System/Library/Fonts/SFNS.ttf"
+    else:
+        print(f"Unknown operating system: {current_os}")
+        font = "Arial"
     parser.add_argument("input_folder", type=Path, help="Folder containing photos and videos")
     parser.add_argument("music_file", type=Path, help="Background music file (mp3/wav/wma)")
     parser.add_argument("-o", "--output", type=Path, default=Path("roadtrip_movie.mp4"), help="Output video path (default: roadtrip_movie.mp4)")
@@ -32,6 +48,7 @@ def main():
     parser.add_argument("--music-volume", type=float, default=1.0, help="Volume multiplier for background music (default: 1.0)")
     parser.add_argument("--no-map", action="store_true", help="Disable the location map inset entirely")
     parser.add_argument("--cache-dir", type=Path, default=None, help="Directory to cache map tiles (default: .map_cache next to output)")
+    parser.add_argument("--font", type=str, default=font, help=f"Font for city name overlay (default: {font})")
 
     args = parser.parse_args()
 
@@ -49,6 +66,7 @@ def main():
         max_video_duration=args.max_video_duration,
         cache_dir=args.cache_dir,
         show_map=not args.no_map,
+        font=args.font,
     )
 
 

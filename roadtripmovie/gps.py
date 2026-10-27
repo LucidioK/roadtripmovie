@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from geopy.geocoders import Nominatim
+
 import imageio_ffmpeg
 from PIL import ExifTags, Image
 
@@ -18,6 +20,39 @@ pillow_heif.register_heif_opener()
 LatLon = tuple[float, float]
 
 _ISO6709_RE = re.compile(r"^([+-]\d+\.?\d*)([+-]\d+\.?\d*)")
+# Initialize Nominatim API (Always use a custom user_agent string)
+_GEOLOCATOR = Nominatim(user_agent="my_geo_app")
+
+
+def get_city_name(lat: float, lon: float) -> str:
+    """
+    Get the city name for given latitude and longitude using the Nominatim API.
+
+    Args:
+        lat (float): Latitude
+        lon (float): Longitude
+
+    Returns:
+        str: City name, or an empty string if not found.
+    """
+    try:
+        # Query the coordinates (can accept a tuple or a string)
+        location = _GEOLOCATOR.reverse((lat, lon), timeout=10)
+
+        if location and "address" in location.raw:
+            address = location.raw["address"]
+
+            # OpenStreetMap uses different keys depending on the region's layout
+            city = (
+                address.get("city")
+                or address.get("town")
+                or address.get("village")
+                or address.get("suburb")
+            )
+            return city
+        return "_"
+    except Exception:
+        return "__"
 
 
 def _dms_to_dd(dms, ref: str) -> float:
@@ -28,7 +63,9 @@ def _dms_to_dd(dms, ref: str) -> float:
     return dd
 
 
-def get_photo_location_and_time(path: Path) -> tuple[Optional[LatLon], Optional[datetime]]:
+def get_photo_location_and_time(
+    path: Path,
+) -> tuple[Optional[LatLon], Optional[datetime]]:
     """Read GPS coordinates and DateTimeOriginal from a photo's EXIF data."""
     try:
         with Image.open(path) as img:
@@ -48,10 +85,9 @@ def get_photo_location_and_time(path: Path) -> tuple[Optional[LatLon], Optional[
 
             captured_at = None
             exif_sub_ifd = exif.get_ifd(ExifTags.IFD.Exif)
-            date_str = (
-                (exif_sub_ifd or {}).get(36867)  # DateTimeOriginal
-                or exif.get(306)  # DateTime (top-level IFD0, if present)
-            )
+            date_str = (exif_sub_ifd or {}).get(36867) or exif.get(  # DateTimeOriginal
+                306
+            )  # DateTime (top-level IFD0, if present)
             if date_str:
                 try:
                     captured_at = datetime.strptime(date_str, "%Y:%m:%d %H:%M:%S")
@@ -81,8 +117,10 @@ def _read_tags_via_ffprobe(path: Path) -> Optional[dict]:
         result = subprocess.run(
             [
                 ffprobe_exe,
-                "-v", "quiet",
-                "-print_format", "json",
+                "-v",
+                "quiet",
+                "-print_format",
+                "json",
                 "-show_format",
                 str(path),
             ],
@@ -117,7 +155,9 @@ def _read_tags_via_ffmpeg_metadata(path: Path) -> dict:
     return tags
 
 
-def get_video_location_and_time(path: Path) -> tuple[Optional[LatLon], Optional[datetime]]:
+def get_video_location_and_time(
+    path: Path,
+) -> tuple[Optional[LatLon], Optional[datetime]]:
     """Read GPS coordinates and creation time from a video's container metadata."""
     tags = _read_tags_via_ffprobe(path)
     if tags is None:
@@ -132,11 +172,15 @@ def get_video_location_and_time(path: Path) -> tuple[Optional[LatLon], Optional[
                 break
 
     captured_at = None
-    creation_time = tags.get("creation_time") or tags.get("com.apple.quicktime.creationdate")
+    creation_time = tags.get("creation_time") or tags.get(
+        "com.apple.quicktime.creationdate"
+    )
     if creation_time:
         try:
             parsed = datetime.fromisoformat(creation_time.replace("Z", "+00:00"))
-            captured_at = parsed.replace(tzinfo=None)  # normalize to naive, matching EXIF/mtime timestamps
+            captured_at = parsed.replace(
+                tzinfo=None
+            )  # normalize to naive, matching EXIF/mtime timestamps
         except ValueError:
             captured_at = None
 

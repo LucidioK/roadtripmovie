@@ -18,6 +18,7 @@ class MediaItem:
     kind: str  # "photo" or "video"
     captured_at: datetime
     location: Optional[tuple[float, float]]
+    city_name: Optional[str] = None
 
 
 def _resolve_item(path: Path) -> Optional[MediaItem]:
@@ -34,7 +35,14 @@ def _resolve_item(path: Path) -> Optional[MediaItem]:
     if captured_at is None:
         captured_at = datetime.fromtimestamp(path.stat().st_mtime)
 
-    return MediaItem(path=path, kind=kind, captured_at=captured_at, location=location)
+    city_name = gps.get_city_name(location[0], location[1]) if location else None
+    return MediaItem(
+        path=path,
+        kind=kind,
+        captured_at=captured_at,
+        location=location,
+        city_name=city_name
+    )
 
 
 def scan_media(folder: Path) -> list[MediaItem]:

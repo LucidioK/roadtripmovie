@@ -18,6 +18,8 @@ from moviepy import (
     CompositeAudioClip,
     CompositeVideoClip,
     ImageClip,
+    TextClip,
+    VideoClip,
     VideoFileClip,
 )
 from moviepy.audio.fx import AudioLoop
@@ -100,8 +102,11 @@ def build_segment(
     map_height: int,
     max_video_duration: Optional[float],
     show_map: bool,
-):
-    """Build a single composited, canvas-fitted segment (with optional map inset) for one media item."""
+    font: str,
+) -> VideoClip:
+    """
+    Build a single composited, canvas-fitted segment (with optional map inset) for one media item.
+    """
     if item.kind == "photo":
         array = _load_photo_array(str(item.path), target_w, target_h)
         base = ImageClip(array).with_duration(photo_duration)
@@ -120,14 +125,33 @@ def build_segment(
         )
         segment = CompositeVideoClip([segment, overlay], size=(target_w, target_h))
 
+    if item.city_name is not None:
+        # Add city name text overlay
+        print(f"  {item.city_name}")
+        text_clip = (
+            TextClip(
+                text=item.city_name,
+                font_size=24,
+                size=(int(target_w*8/10), int(target_h*1/10)),
+                color="yellow",
+                font=font,
+                method="caption",                 
+            )
+            .with_duration(segment.duration)
+            .with_position("bottom")
+        )
+        segment = CompositeVideoClip([segment, text_clip], size=(target_w, target_h))
     if segment.audio is None:
         segment = segment.with_audio(_silent_audio_clip(segment.duration))
 
     return segment
 
 
-def write_segment(segment, output_path: Path, fps: int) -> None:
-    """Render one segment to its own file, so its frames/audio never have to coexist with any other segment's."""
+def write_segment(segment:VideoClip, output_path: Path, fps: int) -> None:
+    """
+    Render one segment to its own file, so its frames/audio never have to coexist
+    with any other segment's.
+    """
     segment.write_videofile(
         str(output_path),
         fps=fps,
@@ -140,7 +164,8 @@ def write_segment(segment, output_path: Path, fps: int) -> None:
 
 
 def concatenate_video_files(file_paths: list[Path], output_path: Path) -> None:
-    """Join already-rendered segment files with ffmpeg's concat demuxer (stream copy, no re-encode).
+    """
+    Join already-rendered segment files with ffmpeg's concat demuxer (stream copy, no re-encode).
 
     Unlike concatenate_videoclips, this never has more than one segment's worth of encoded frames
     open at a time - ffmpeg streams the existing files straight into the joined output.
