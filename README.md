@@ -5,6 +5,10 @@ road-trip movie. Each media item becomes a clip — photos become still segments
 back — ordered chronologically by capture time, optionally with a small OpenStreetMap location
 inset, all concatenated and mixed with background music.
 
+Examples of videos created with this tool:
+https://www.youtube.com/watch?v=xUOON21M5Mk
+https://www.youtube.com/watch?v=yKgZcQI_m-8
+
 ## Requirements
 
 - Python 3.10+
