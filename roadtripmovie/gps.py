@@ -7,8 +7,11 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-
-from geopy.geocoders import Nominatim
+import numpy as np
+import pandas as pd
+import joblib
+# from geopy.geocoders import Nominatim
+# from geopy.exc import GeocoderTimedOut, GeocoderServiceError, GeocoderRateLimited
 
 import imageio_ffmpeg
 from PIL import ExifTags, Image
@@ -21,10 +24,30 @@ LatLon = tuple[float, float]
 
 _ISO6709_RE = re.compile(r"^([+-]\d+\.?\d*)([+-]\d+\.?\d*)")
 # Initialize Nominatim API (Always use a custom user_agent string)
-_GEOLOCATOR = Nominatim(user_agent="my_geo_app")
-
+# _GEOLOCATOR = Nominatim(user_agent="my_geo_app")
+_CITY_SPATIAL_TREE = joblib.load("spatial_index.pkl")
+_DF_CITIES = pd.read_feather("cities_metadata.feather")
 
 def get_city_name(lat: float, lon: float) -> str:
+    """
+    Get the city name for given latitude and longitude 
+
+    Args:
+        lat (float): Latitude
+        lon (float): Longitude
+
+    Returns:
+        str: City name, or an empty string if not found.
+    """
+    if -0.1 <= lat <= 0.1 and -0.1 <= lon <= 0.1:
+        return "_"
+    target_rad = np.deg2rad([[lat, lon]])
+    _, index = _CITY_SPATIAL_TREE.query(target_rad, k=1)
+    # print(f"{lat},{lon} Closest City: {_DF_CITIES.iloc[index[0][0]]['cityname']}")
+    return _DF_CITIES.iloc[index[0][0]]['cityname']
+
+
+def _get_city_name(lat: float, lon: float) -> str:
     """
     Get the city name for given latitude and longitude using the Nominatim API.
 
@@ -35,6 +58,7 @@ def get_city_name(lat: float, lon: float) -> str:
     Returns:
         str: City name, or an empty string if not found.
     """
+    
     try:
         # Query the coordinates (can accept a tuple or a string)
         location = _GEOLOCATOR.reverse((lat, lon), timeout=10)
@@ -51,7 +75,11 @@ def get_city_name(lat: float, lon: float) -> str:
             )
             return city
         return "_"
-    except Exception:
+    except GeocoderRateLimited as e:
+        print(f"GeocoderRateLimited ({lat}, {lon}) {e}")
+        return "__"        
+    except Exception as e:
+        print(f"Error retrieving city name for coordinates ({lat}, {lon}) {e}")
         return "__"
 
 

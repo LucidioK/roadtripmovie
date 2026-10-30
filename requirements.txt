@@ -4,3 +4,8 @@ Pillow
 pillow-heif
 staticmap
 requests
+pandas
+numpy
+scikit-learn
+joblib
+pyarrow

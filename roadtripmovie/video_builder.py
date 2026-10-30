@@ -1,4 +1,5 @@
-"""Build per-item video segments, composite the map inset, write each to its own file, then
+"""
+Build per-item video segments, composite the map inset, write each to its own file, then
 concatenate the files on disk and mix in background music.
 
 Segments are written to disk one at a time (instead of being kept open as clip objects in a
@@ -28,18 +29,33 @@ from PIL import Image, ImageOps
 from . import map_thumbnail
 from .media_scanner import MediaItem
 
+# Constants for video building
 MAP_MARGIN = 20
 AUDIO_FPS = 44100
 
 
 def _load_photo_array(path: str, target_w: int, target_h: int) -> np.ndarray:
-    """Open and downscale a photo to fit the output canvas before it ever reaches moviepy.
+    """
+    Open and downscale a photo to fit the output canvas before it ever reaches moviepy.
 
     Real photos (12MP+ from a phone/camera) are far larger than the output resolution.
     ImageClip keeps whatever array it's given alive for the life of the pipeline run, so
     handing it the full-resolution image for every photo in a large trip folder can exhaust
     memory well before encoding starts. Resizing here means only a small, canvas-sized array
     is ever retained.
+
+    Args:
+        path (str): Path to the photo file.
+        target_w (int): Target width of the output canvas.
+        target_h (int): Target height of the output canvas.
+
+    Returns:
+        np.ndarray: The downscaled photo as a NumPy array.
+
+    Raises:
+        FileNotFoundError: If the photo file does not exist.
+        ValueError: If the target width or height is not positive.
+
     """
     with Image.open(path) as img:
         img = ImageOps.exif_transpose(img)  # respect phone/camera orientation metadata
@@ -51,7 +67,10 @@ def _load_photo_array(path: str, target_w: int, target_h: int) -> np.ndarray:
 
 
 def _fit_to_canvas(clip, target_w: int, target_h: int):
-    """Resize a clip to fit within (target_w, target_h) preserving aspect ratio, centered on a black canvas."""
+    """
+    Resize a clip to fit within (target_w, target_h) preserving aspect ratio,
+    centered on a black canvas.
+    """
     scale = min(target_w / clip.w, target_h / clip.h)
     resized = clip.resized(scale).with_position("center")
     return CompositeVideoClip([resized], size=(target_w, target_h), bg_color=(0, 0, 0))
@@ -75,11 +94,22 @@ def _map_overlay_clip(
 
 
 def _silent_audio_clip(duration: float, fps: int = AUDIO_FPS) -> AudioClip:
-    """A silent stereo audio track, used so every segment file has an audio stream.
+    """
+    A silent stereo audio track, used so every segment file has an audio stream.
 
     ffmpeg's concat demuxer (used to join segment files on disk) requires every input to have
     the same stream layout, so photo segments (which have no audio) need a silent placeholder
     to line up with video segments that do.
+    Args:
+        duration (float): Duration of the silent audio clip.
+        fps (int, optional): Frames per second for the audio clip. Defaults to AUDIO_FPS.
+
+    Returns:
+        AudioClip: The silent audio clip.
+
+    Raises:
+        ValueError: If the duration is not positive.
+    
     """
 
     def make_frame(t):
@@ -106,6 +136,28 @@ def build_segment(
 ) -> VideoClip:
     """
     Build a single composited, canvas-fitted segment (with optional map inset) for one media item.
+
+    Args:
+        item (MediaItem): The media item to build the segment for.
+        photo_duration (float): Duration to display the photo if the item is a photo.
+        target_w (int): Target width of the output segment.
+        target_h (int): Target height of the output segment.
+        map_cache_dir (Path): Directory to cache map images.
+        video_audio_volume (float): Volume level for the video's audio.
+        map_zoom (int): Zoom level for the map overlay.
+        map_width (int): Width of the map overlay.
+        map_height (int): Height of the map overlay.
+        max_video_duration (Optional[float]): Maximum duration for the video segment.
+        show_map (bool): Whether to show the map overlay.
+        font (str): Font to use for text overlays.
+
+    Returns:
+        VideoClip: The composited video segment.
+    Raises:
+        ValueError: If the media item is invalid or missing required attributes.
+        FileNotFoundError: If the media item's file does not exist.
+        subprocess.CalledProcessError: If ffmpeg fails to process the media item.
+        Exception: Any other unexpected errors during segment building.
     """
     if item.kind == "photo":
         array = _load_photo_array(str(item.path), target_w, target_h)
@@ -135,7 +187,7 @@ def build_segment(
                 size=(int(target_w*8/10), int(target_h*1/10)),
                 color="yellow",
                 font=font,
-                method="caption",                 
+                method="caption",
             )
             .with_duration(segment.duration)
             .with_position("bottom")
@@ -151,6 +203,17 @@ def write_segment(segment:VideoClip, output_path: Path, fps: int) -> None:
     """
     Render one segment to its own file, so its frames/audio never have to coexist
     with any other segment's.
+    
+    Args:
+        segment (VideoClip): The video segment to write.
+        output_path (Path): Path to the output video file.
+        fps (int): Frames per second for the output video.
+
+    Returns:
+        None
+    
+    Raises:
+        subprocess.CalledProcessError: If ffmpeg fails to write the video segment.
     """
     segment.write_videofile(
         str(output_path),
@@ -159,6 +222,7 @@ def write_segment(segment:VideoClip, output_path: Path, fps: int) -> None:
         audio_codec="aac",
         audio_fps=AUDIO_FPS,
         logger=None,
+        threads=8,
     )
     segment.close()
 
@@ -169,6 +233,15 @@ def concatenate_video_files(file_paths: list[Path], output_path: Path) -> None:
 
     Unlike concatenate_videoclips, this never has more than one segment's worth of encoded frames
     open at a time - ffmpeg streams the existing files straight into the joined output.
+    Args:
+        file_paths (list[Path]): List of segment file paths to concatenate.
+        output_path (Path): Path to the output concatenated video file.
+
+    Returns:
+        None
+
+    Raises:
+        subprocess.CalledProcessError: If ffmpeg fails to concatenate the files.
     """
     list_file = output_path.with_suffix(".txt")
     with open(list_file, "w", encoding="utf-8") as f:
@@ -196,14 +269,17 @@ def concatenate_video_files(file_paths: list[Path], output_path: Path) -> None:
 
 
 def mix_background_music(video_clip, music_path: str, music_volume: float):
-    """Loop/trim background music to the video's total duration and mix with any existing segment audio.
+    """
+    Loop/trim background music to the video's total duration and mix with any existing
+    segment audio.
 
     Returns the mixed clip together with the original ``music_source`` AudioFileClip. The mixed
     clip's audio is a CompositeAudioClip, and CompositeAudioClip.close() does not close its
     sub-clips - so ``video_clip.audio``'s reader must be closed explicitly by the caller. The
-    looped/trimmed ``music`` clip is a plain AudioClip rebuilt by AudioLoop's concatenate_audioclips
-    (it has no ``.reader`` of its own), so ``music_source`` - the AudioFileClip actually holding the
-    open file - must be kept and closed separately, or ffmpeg keeps the music file open (e.g.
+    looped/trimmed ``music`` clip is a plain AudioClip rebuilt by AudioLoop's
+    concatenate_audioclips (it has no ``.reader`` of its own), so ``music_source``
+    - the AudioFileClip actually holding the open file -
+    must be kept and closed separately, or ffmpeg keeps the music file open (e.g.
     blocking deletion on Windows).
     """
     total_duration = video_clip.duration

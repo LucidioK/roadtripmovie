@@ -23,6 +23,18 @@ pip install -r requirements.txt
 python main.py <input_folder> <music_file> [-o output.mp4] [options]
 ```
 
+On Windows, a single-file PowerShell alternative is also available:
+
+```powershell
+.\RoadTripMovie.ps1 <input_folder> <music_file> [-Output output.mp4] [options]
+```
+
+It requires PowerShell 7+, `ffmpeg`, and `ffprobe` on `PATH`. Media metadata scans and
+segment rendering run concurrently (limited by `-MaxParallelism`, defaulting to one less
+than the processor count). Map thumbnails are fetched from OpenStreetMap and cached; city
+labels use the repository's local city index when its Python dependencies are available.
+Use `-NoMap` to disable map downloads.
+
 - `input_folder` — folder containing photos and videos to include
 - `music_file` — background music track (mp3/wav/wma/etc.)
 

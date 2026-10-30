@@ -49,6 +49,7 @@ def main():
     parser.add_argument("--no-map", action="store_true", help="Disable the location map inset entirely")
     parser.add_argument("--cache-dir", type=Path, default=None, help="Directory to cache map tiles (default: .map_cache next to output)")
     parser.add_argument("--font", type=str, default=font, help=f"Font for city name overlay (default: {font})")
+    #parser.add_argument("--max-parallelism", type=int, default=None, help="Maximum number of parallel tasks (default: auto)")
 
     args = parser.parse_args()
 
@@ -67,6 +68,7 @@ def main():
         cache_dir=args.cache_dir,
         show_map=not args.no_map,
         font=args.font,
+        #max_parallelism=args.max_parallelism,
     )
 
 

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 from datetime import datetime
-
+import os
 import queue
 import sys
 import tempfile
-import threading
+import time
+import traceback
 from pathlib import Path
 
 from moviepy import VideoFileClip
@@ -42,6 +43,7 @@ class Pipeline:
         max_video_duration: float | None = None,
         cache_dir: Path | None = None,
         show_map: bool = True,
+        # max_parallelism: int | None = None,
     ):
         if not Path(music_path).is_file() or Path(music_path).suffix.lower() not in [
             ".mp3",
@@ -66,9 +68,10 @@ class Pipeline:
         self.max_video_duration: float | None = max_video_duration
         self.cache_dir: Path | None = cache_dir
         self.show_map: bool = show_map
+        # self.max_parallelism: int | None = max_parallelism or 1
         self.enumerated_items: list[tuple[int, any]] = []
         self.segment_files: queue.Queue[Path] = queue.Queue()
-        self.lock: threading.Lock = threading.Lock()
+        # self.lock: multiprocessing.Lock = multiprocessing.Lock()
         self.tmp_path: Path | None = None
         self.start_time: datetime = datetime.now()
         print(
@@ -77,15 +80,22 @@ class Pipeline:
             f"GIL enabled: {YELLOW}{sys._is_gil_enabled()}{NO_COLOR}"
         )
         self.central_loop: callable = self._sequential_loop
-        if sys.version_info >= (3, 14):
-            if not sys._is_gil_enabled():
-                self.central_loop = self._multi_threaded_loop
+        # if self.max_parallelism > 1 and sys.version_info >= (3, 14) and not sys._is_gil_enabled():
+        #     self.central_loop = self._multi_threaded_loop
+        # print(f"{GREEN}Pipeline instance initialized: {YELLOW}"
+        #       f"{json.dumps(self.__dict__, indent=2, default=str)}{NO_COLOR}")
 
-    def _build_segment(self, index: int, item: MediaItem) -> None:
-        print(
-            f"{GREEN}Processing {YELLOW}{index}: {item.path.name} {GREEN}({CYAN}{item.kind}"
-            f"{GREEN}, {CYAN}{item.captured_at}{GREEN})...{NO_COLOR}"
-        )
+    def build_segment(self, item: MediaItem) -> None:
+        """
+        Build a video segment for the given media item.
+
+        Args:
+            item (MediaItem): The media item to build the segment for.
+
+        Returns:
+            None, but the segment is added to the internal queue for later processing.
+        """
+        index = item.index
         try:
             print(
                 f"{GREEN}  Processing {YELLOW}{index}: {item.path.name}{GREEN}: build...{NO_COLOR}"
@@ -93,14 +103,13 @@ class Pipeline:
             if self.segment_files.qsize() > 1:
                 time_until_now = datetime.now() - self.start_time
                 built_segment_count = self.segment_files.qsize()
-                predicted_total_time = (time_until_now / built_segment_count) * (
-                    len(self.enumerated_items) - built_segment_count
-                )
+                still_to_build = len(self.enumerated_items) - built_segment_count
+                predicted_total_time = (time_until_now / built_segment_count) * still_to_build
                 print(
-                    f"{GREEN}  Took {YELLOW}{time_until_now}{GREEN} until now,  "
+                    f"{GREEN}  Took {YELLOW}{time_until_now}{GREEN} until now  "
                     f"for {YELLOW}{built_segment_count}{GREEN} segments, "
-                    f"for {YELLOW}{len(self.enumerated_items)-built_segment_count}{GREEN} more segments, "
-                    f"{YELLOW}{predicted_total_time}{GREEN} predicted total time{NO_COLOR}"
+                    f"for {YELLOW}{still_to_build}{GREEN} more segments, "
+                    f"{YELLOW}{predicted_total_time}{GREEN} more time{NO_COLOR}"
                 )
             segment = video_builder.build_segment(
                 item=item,
@@ -116,12 +125,13 @@ class Pipeline:
                 show_map=self.show_map,
                 font=self.font,
             )
-        except Exception as exc:
+        except (OSError, ValueError, RuntimeError) as exc:
             print(
-                f"{RED}Warning: skipping unreadable file {item.path}: {exc} \n {exc.__traceback__}"
-                f"{NO_COLOR}",
+                f"{RED}Warning: build_segment skipping unreadable file {item.path}: {exc} \n"
+                f"{exc.__traceback__}{NO_COLOR}",
                 file=sys.stderr,
             )
+            traceback.print_exc()
             return None
 
         segment_file = self.tmp_path / f"segment_{index:05d}.mp4"
@@ -129,7 +139,21 @@ class Pipeline:
             f"{GREEN}  Processing {YELLOW}{index}: {item.path.name}{GREEN}: writing to {YELLOW}"
             f"{segment_file}{GREEN}...{NO_COLOR}"
         )
-        video_builder.write_segment(segment, segment_file, fps=self.fps)
+        for attempt in range(3):
+            try:
+                video_builder.write_segment(segment, segment_file, fps=self.fps)
+                break
+            except BrokenPipeError as exc:
+                print(
+                    f"{RED}Warning: write_segment failed with BrokenPipeError for {item.path.name}"
+                    f" (attempt {attempt + 1}): {exc} \n {exc.__traceback__}{NO_COLOR}",
+                    file=sys.stderr,
+                )
+                traceback.print_exc()
+                if attempt == 2:
+                    return None
+                else:
+                    time.sleep(5)
         print(
             f"{GREEN}  Processing {YELLOW}{index}: {item.path.name}"
             f"{GREEN}: appending to segment files...{NO_COLOR}"
@@ -139,26 +163,32 @@ class Pipeline:
     def _sequential_loop(self) -> None:
         start = datetime.now()
         print(f"{GREEN}Processing media items {YELLOW}sequentially{GREEN}...{NO_COLOR}")
-        for index, item in self.enumerated_items:
-            self._build_segment(index, item)
+        if Path("pipeline_state.json").exists():
+            os.unlink("pipeline_state.json")
+        for _, item in self.enumerated_items:
+            self.build_segment(item)
         end = datetime.now()
         print(
             f"{GREEN}Finished processing media items {YELLOW}sequentially{GREEN} in {CYAN}"
             f"{(end - start)}{NO_COLOR}"
         )
 
-    def _multi_threaded_loop(self) -> None:
-        start = datetime.now()
-        print(f"{GREEN}Processing media items {YELLOW}in parallel{GREEN}...{NO_COLOR}")
-        from concurrent.futures import ThreadPoolExecutor
+    # This does not work...
+    # def _multi_threaded_loop(self) -> None:
+    #     from concurrent.futures import ThreadPoolExecutor
+    #     start = datetime.now()
+    #     max_workers = self.max_parallelism or 2
+    #     print(f"{GREEN}Processing media items {YELLOW}in parallel{GREEN} with "
+    #           f"{YELLOW}{max_workers}{GREEN} workers...  {self.__hash__()}{NO_COLOR}")
+    #     with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    #         tasks = list(executor.map(self.build_segment, [
+    #                      item[1] for item in self.enumerated_items]))
 
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            executor.map(lambda args: self._build_segment(*args), self.enumerated_items)
-        end = datetime.now()
-        print(
-            f"{GREEN}Finished processing media items {YELLOW}in parallel{GREEN} in {CYAN}"
-            f"{(end - start)}{NO_COLOR}"
-        )
+    #     end = datetime.now()
+    #     print(
+    #         f"{GREEN}Finished processing media items {YELLOW}in parallel{GREEN} in {CYAN}"
+    #         f"{(end - start)}{NO_COLOR}"
+    #     )
 
     def run(self):
         """
@@ -185,7 +215,10 @@ class Pipeline:
             print(f"{GREEN}Temporary directory: {YELLOW}{self.tmp_path}{NO_COLOR}")
             self.central_loop()  # Process media items to build segments
 
-            if not self.segment_files:
+            self.segment_files = queue.Queue()
+            for file in sorted(self.tmp_path.iterdir()):
+                self.segment_files.put(file)
+            if self.segment_files.empty():
                 raise SystemExit("No media files could be processed successfully.")
 
             print(f"{GREEN}Concatenating segments...{NO_COLOR}")
@@ -238,6 +271,7 @@ def run(
     """
     Run the road trip movie pipeline.
     """
+
     pipeline = Pipeline(
         input_folder=input_folder,
         music_path=music_path,
@@ -253,5 +287,6 @@ def run(
         cache_dir=cache_dir,
         show_map=show_map,
         font=font,
+        # max_parallelism=max_parallelism,
     )
     pipeline.run()
