@@ -37,14 +37,42 @@ namespace RoadTripMovie
             StackPanel const& panel, hstring const& header,
             double value, double minimum, double maximum)
         {
+            auto horizontalPanel = StackPanel();
+            horizontalPanel.Orientation(Orientation::Horizontal);
+            horizontalPanel.VerticalAlignment(VerticalAlignment::Center);
+			TextBlock label;
+			label.Width(240);
+			label.Text(header);
+			horizontalPanel.Children().Append(label);
             NumberBox box;
-            box.Header(box_value(header));
             box.Value(value);
             box.Minimum(minimum);
             box.Maximum(maximum);
-            panel.Children().Append(box);
+            horizontalPanel.Children().Append(box);
+			panel.Children().Append(horizontalPanel);
             return box;
         }
+
+		TextBox AddTextFieldWithBrowse(
+			StackPanel const& panel,
+            hstring const& labelText,
+			auto handler,
+            hstring const& buttonText = L"Browse")
+		{
+			auto horizontalPanel = StackPanel();
+			horizontalPanel.Orientation(Orientation::Horizontal);
+			horizontalPanel.VerticalAlignment(VerticalAlignment::Center);
+			TextBlock label;
+			label.Width(240);
+			label.Text(labelText);
+			horizontalPanel.Children().Append(label);
+			TextBox box;
+			box.Width(200);
+			horizontalPanel.Children().Append(box);
+			AddBrowseButton(horizontalPanel, buttonText, handler);
+			panel.Children().Append(horizontalPanel);
+			return box;
+		}
     }
 
     MainWindow::MainWindow()
@@ -67,21 +95,13 @@ namespace RoadTripMovie
         introduction.TextWrapping(TextWrapping::Wrap);
         form.Children().Append(introduction);
 
-        inputFolderBox = TextBox();
-        AddTextField(form, L"Media folder", inputFolderBox);
-        AddBrowseButton(form, L"Browse media folder",
-            [this](auto&&, auto&&) { BrowseFolderAsync(); });
+		inputFolderBox = AddTextFieldWithBrowse(form, L"Media folder",
+			[this](auto&&, auto&&) { BrowseFolderAsync(); });
+		musicFileBox = AddTextFieldWithBrowse(form, L"Background music",
+			[this](auto&&, auto&&) { BrowseMusicAsync(); });
 
-        musicFileBox = TextBox();
-        AddTextField(form, L"Background music", musicFileBox);
-        AddBrowseButton(form, L"Browse music",
-            [this](auto&&, auto&&) { BrowseMusicAsync(); });
-
-        outputFileBox = TextBox();
-        outputFileBox.Text(L"roadtrip_movie.mp4");
-        AddTextField(form, L"Output video", outputFileBox);
-        AddBrowseButton(form, L"Save as",
-            [this](auto&&, auto&&) { BrowseOutputAsync(); });
+        outputFileBox = AddTextFieldWithBrowse(form, L"Output video",
+            [this](auto&&, auto&&) { BrowseOutputAsync(); }, L"Save as");
 
         photoDurationBox = AddNumberField(form, L"Photo duration (seconds)", 5, 0.1, 3600);
         videoLimitBox = AddNumberField(form, L"Video cap (seconds, 0 = full clip)", 0, 0, 86400);
