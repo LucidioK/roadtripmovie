@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\Microsoft\DesktopBridge\Microsoft.DesktopBridge.props" />
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ProjectGuid>{F7E591EC-EDBF-4FE3-9A5B-7721572B7585}</ProjectGuid>
+    <ProjectName>RoadTripMovie.Package</ProjectName>
+    <RootNamespace>RoadTripMovie.Package</RootNamespace>
+    <DefaultLanguage>en-US</DefaultLanguage>
+    <AppxPackage>true</AppxPackage>
+    <AppxBundle>Always</AppxBundle>
+    <AppxBundlePlatforms>x64</AppxBundlePlatforms>
+    <AppxPackageDir>$(SolutionDir)artifacts\</AppxPackageDir>
+    <EntryPointProjectUniqueName>..\RoadTripMovie\RoadTripMovie.vcxproj</EntryPointProjectUniqueName>
+    <TargetPlatformVersion>10.0.26100.0</TargetPlatformVersion>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <RestoreProjectStyle>PackagesConfig</RestoreProjectStyle>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\RoadTripMovie\RoadTripMovie.vcxproj">
+      <Project>{8D29A86C-8E1D-4D0A-A2D8-B79F6B394E65}</Project>
+      <Name>RoadTripMovie</Name>
+      <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+    </ProjectReference>
+    <AppxManifest Include="..\RoadTripMovie\Package.appxmanifest">
+      <SubType>Designer</SubType>
+    </AppxManifest>
+    <Content Include="..\RoadTripMovie\Assets\*.png">
+      <Link>Assets\%(Filename)%(Extension)</Link>
+    </Content>
+    <Content Include="..\vcpkg_installed\x64-windows\bin\avcodec-*.dll;..\vcpkg_installed\x64-windows\bin\avfilter-*.dll;..\vcpkg_installed\x64-windows\bin\avformat-*.dll;..\vcpkg_installed\x64-windows\bin\avutil-*.dll;..\vcpkg_installed\x64-windows\bin\swresample-*.dll;..\vcpkg_installed\x64-windows\bin\swscale-*.dll">
+      <Link>RoadTripMovie\%(Filename)%(Extension)</Link>
+    </Content>
+    <Content Include="..\vcpkg_installed\x64-windows\share\ffmpeg\copyright">
+      <Link>RoadTripMovie\licenses\FFmpeg-LICENSE.txt</Link>
+    </Content>
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath)\Microsoft\DesktopBridge\Microsoft.DesktopBridge.targets" />
+</Project>

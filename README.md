@@ -74,6 +74,11 @@ below for backfilling correct timestamps beforehand).
 There is no automated test suite. Verify changes by running the CLI end-to-end against a real
 (or synthetic) media folder and inspecting the output video.
 
+## Native Windows application
+
+The C++/WinUI 3 MSIX application is in [`native/`](native/README.md). Its current feature
+coverage and Windows Store packaging requirements are documented there.
+
 ## Files
 
 ### Entry point

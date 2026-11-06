@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="..\packages\Microsoft.Windows.CppWinRT.3.0.260818.1\build\native\Microsoft.Windows.CppWinRT.props" Condition="Exists('..\packages\Microsoft.Windows.CppWinRT.3.0.260818.1\build\native\Microsoft.Windows.CppWinRT.props')" />
+  <Import Project="..\packages\Microsoft.Windows.SDK.BuildTools.10.0.22621.756\buildTransitive\Microsoft.Windows.SDK.BuildTools.props" Condition="Exists('..\packages\Microsoft.Windows.SDK.BuildTools.10.0.22621.756\buildTransitive\Microsoft.Windows.SDK.BuildTools.props')" />
+  <Import Project="..\packages\Microsoft.WindowsAppSDK.1.6.250205002\build\native\Microsoft.WindowsAppSDK.props" Condition="Exists('..\packages\Microsoft.WindowsAppSDK.1.6.250205002\build\native\Microsoft.WindowsAppSDK.props')" />
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{8D29A86C-8E1D-4D0A-A2D8-B79F6B394E65}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>RoadTripMovie</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+    <ProjectName>RoadTripMovie</ProjectName>
+    <CppWinRTEnabled>true</CppWinRTEnabled>
+    <UseWinUI>true</UseWinUI>
+    <VcpkgEnabled>true</VcpkgEnabled>
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+    <VcpkgTriplet>x64-windows</VcpkgTriplet>
+    <VcpkgManifestRoot>$(SolutionDir)</VcpkgManifestRoot>
+    <RestoreProjectStyle>PackagesConfig</RestoreProjectStyle>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WindowsTargetPlatformMinVersion>10.0.19041.0</WindowsTargetPlatformMinVersion>
+    <ApplicationType>Windows Store</ApplicationType>
+    <ApplicationTypeRevision>10.0</ApplicationTypeRevision>
+    <AppContainerApplication>false</AppContainerApplication>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WindowsTargetPlatformMinVersion>10.0.19041.0</WindowsTargetPlatformMinVersion>
+    <ApplicationType>Windows Store</ApplicationType>
+    <ApplicationTypeRevision>10.0</ApplicationTypeRevision>
+    <AppContainerApplication>false</AppContainerApplication>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <VcpkgRoot Condition="'$(VcpkgRoot)'==''">$([System.IO.Path]::GetFullPath('$(VCTargetsPath)..\..\..\..\VC\vcpkg'))</VcpkgRoot>
+    <CppWinRTPath>"$(WindowsSdkDir)bin\$(WindowsTargetPlatformVersion)\x64\"</CppWinRTPath>
+    <FFmpegInstalledDir>$(SolutionDir)vcpkg_installed\x64-windows</FFmpegInstalledDir>
+    <WindowsAppSDKPackageDir>$(SolutionDir)packages\Microsoft.WindowsAppSDK.1.6.250205002</WindowsAppSDKPackageDir>
+    <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)obj\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+    <XamlGeneratedOutputPath>$(IntDir)</XamlGeneratedOutputPath>
+  </PropertyGroup>
+  <Import Project="$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.props"
+          Condition="Exists('$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.props')" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IncludePath>$(WindowsSdkDir)Include\$(WindowsTargetPlatformVersion)\cppwinrt;$(ProjectDir)Generated Files\winrt;$(XamlGeneratedOutputPath);$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>$(WindowsSdkDir)Include\$(WindowsTargetPlatformVersion)\cppwinrt;$(ProjectDir)Generated Files\winrt;$(XamlGeneratedOutputPath);$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PreprocessorDefinitions>UNICODE;_UNICODE;NOMINMAX;_SILENCE_CXX20_REL_OPS_DEPRECATION_WARNING;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)..\..\third_party\LibFFmpeg\src\lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalDependencies>windowsapp.lib;$(WindowsAppSDKPackageDir)\lib\win10-x64\Microsoft.WindowsAppRuntime.Bootstrap.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="App.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="MainWindow.cpp" />
+    <ClCompile Include="Pipeline.cpp" />
+    <ClCompile Include="FfmpegProcessor.cpp" />
+    <ClCompile Include="$(XamlGeneratedOutputPath)XamlTypeInfo.g.cpp" />
+    <ClCompile Include="$(XamlGeneratedOutputPath)XamlTypeInfo.Impl.g.cpp" />
+    <ClCompile Include="..\..\third_party\LibFFmpeg\src\lib\**\*.cpp">
+      <ObjectFileName>$(IntDir)LibFFmpeg\%(RecursiveDir)%(Filename).obj</ObjectFileName>
+    </ClCompile>
+    <ClInclude Include="App.h" />
+    <ApplicationDefinition Include="App.xaml">
+      <SubType>Designer</SubType>
+    </ApplicationDefinition>
+    <ClInclude Include="MainWindow.h" />
+    <ClInclude Include="Pipeline.h" />
+    <ClInclude Include="FfmpegProcessor.h" />
+    <ClInclude Include="pch.h" />
+    <Content Include="$(WindowsAppSDKPackageDir)\runtimes\win-x64\native\Microsoft.WindowsAppRuntime.Bootstrap.dll">
+      <Link>Microsoft.WindowsAppRuntime.Bootstrap.dll</Link>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <None Include="Package.appxmanifest" />
+    <None Include="packages.config" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.targets"
+          Condition="Exists('$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.targets')" />
+  <Import Project="..\packages\Microsoft.Web.WebView2.1.0.2651.64\build\native\Microsoft.Web.WebView2.targets" Condition="Exists('..\packages\Microsoft.Web.WebView2.1.0.2651.64\build\native\Microsoft.Web.WebView2.targets')" />
+  <Import Project="..\packages\Microsoft.Windows.SDK.BuildTools.10.0.22621.756\buildTransitive\Microsoft.Windows.SDK.BuildTools.targets" Condition="Exists('..\packages\Microsoft.Windows.SDK.BuildTools.10.0.22621.756\buildTransitive\Microsoft.Windows.SDK.BuildTools.targets')" />
+  <Import Project="..\packages\Microsoft.WindowsAppSDK.1.6.250205002\build\native\Microsoft.WindowsAppSDK.targets" Condition="Exists('..\packages\Microsoft.WindowsAppSDK.1.6.250205002\build\native\Microsoft.WindowsAppSDK.targets')" />
+  <Target Name="CompileWinUIXaml" BeforeTargets="ClCompile"
+          DependsOnTargets="ResolveAssemblyReferences;ResolveKeySource;MarkupCompilePass1;MarkupCompilePass2" />
+  <Target Name="IncludeFFmpegRuntimeFiles"
+          BeforeTargets="GetCopyToOutputDirectoryItems;ClCompile"
+          DependsOnTargets="VcpkgInstallManifestDependencies">
+    <ItemGroup>
+      <FFmpegRuntimeDll Include="$(FFmpegInstalledDir)\bin\avcodec-*.dll;$(FFmpegInstalledDir)\bin\avfilter-*.dll;$(FFmpegInstalledDir)\bin\avformat-*.dll;$(FFmpegInstalledDir)\bin\avutil-*.dll;$(FFmpegInstalledDir)\bin\swresample-*.dll;$(FFmpegInstalledDir)\bin\swscale-*.dll" />
+      <Content Include="@(FFmpegRuntimeDll)">
+        <TargetPath>%(Filename)%(Extension)</TargetPath>
+        <Link>%(Filename)%(Extension)</Link>
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </Content>
+      <Content Include="$(FFmpegInstalledDir)\share\ffmpeg\copyright"
+               Condition="Exists('$(FFmpegInstalledDir)\share\ffmpeg\copyright')">
+        <TargetPath>licenses\FFmpeg-LICENSE.txt</TargetPath>
+        <Link>licenses\FFmpeg-LICENSE.txt</Link>
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+    <MakeDir Directories="$(OutDir);$(OutDir)licenses" />
+    <Copy SourceFiles="@(FFmpegRuntimeDll)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true"
+          Condition="Exists('$(FFmpegInstalledDir)\bin')" />
+    <Copy SourceFiles="$(FFmpegInstalledDir)\share\ffmpeg\copyright"
+          DestinationFiles="$(OutDir)licenses\FFmpeg-LICENSE.txt"
+          SkipUnchangedFiles="true"
+          Condition="Exists('$(FFmpegInstalledDir)\share\ffmpeg\copyright')" />
+  </Target>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\Microsoft.Windows.CppWinRT.3.0.260818.1\build\native\Microsoft.Windows.CppWinRT.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Windows.CppWinRT.3.0.260818.1\build\native\Microsoft.Windows.CppWinRT.props'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.Windows.CppWinRT.3.0.260818.1\build\native\Microsoft.Windows.CppWinRT.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Windows.CppWinRT.3.0.260818.1\build\native\Microsoft.Windows.CppWinRT.targets'))" />
+  </Target>
+  <Import Project="..\packages\Microsoft.Windows.CppWinRT.3.0.260818.1\build\native\Microsoft.Windows.CppWinRT.targets" Condition="Exists('..\packages\Microsoft.Windows.CppWinRT.3.0.260818.1\build\native\Microsoft.Windows.CppWinRT.targets')" />
+</Project>

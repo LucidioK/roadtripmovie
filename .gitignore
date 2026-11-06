@@ -3,3 +3,15 @@ __pycache__/
 .venv/
 .venv_check/
 .map_cache/
+native/.vs/
+native/bin/
+native/obj/
+native/artifacts/
+native/packages/
+native/vcpkg_installed/
+native/ffmpeg/
+native/RoadTripMovie/bin/
+native/RoadTripMovie/obj/
+native/RoadTripMovie/Generated Files/
+native/RoadTripMovie.Package/bin/
+native/RoadTripMovie.Package/obj/

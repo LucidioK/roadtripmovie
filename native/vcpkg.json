@@ -1,0 +1,25 @@
+{
+  "name": "roadtripmovie",
+  "version-string": "1.0.0",
+  "builtin-baseline": "db00e0c76ae37ede9464c157a3ec8653f8fbb494",
+  "dependencies": [
+    {
+      "name": "ffmpeg",
+      "default-features": false,
+      "features": [
+        "avcodec",
+        "avfilter",
+        "avformat",
+        "swresample",
+        "swscale"
+      ]
+    }
+  ],
+  "overrides": [
+    {
+      "name": "ffmpeg",
+      "version": "7.1.2",
+      "port-version": 5
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{BC8A1FFA-BEE3-4634-8014-F334798102B3}") = "RoadTripMovie", "RoadTripMovie\RoadTripMovie.vcxproj", "{8D29A86C-8E1D-4D0A-A2D8-B79F6B394E65}"
+EndProject
+Project("{C7167F0D-BC9F-4E6E-AFE1-012C56B48DB5}") = "RoadTripMovie.Package", "RoadTripMovie.Package\RoadTripMovie.Package.wapproj", "{F7E591EC-EDBF-4FE3-9A5B-7721572B7585}"
+	ProjectSection(ProjectDependencies) = postProject
+		{8D29A86C-8E1D-4D0A-A2D8-B79F6B394E65} = {8D29A86C-8E1D-4D0A-A2D8-B79F6B394E65}
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8D29A86C-8E1D-4D0A-A2D8-B79F6B394E65}.Debug|x64.ActiveCfg = Debug|x64
+		{8D29A86C-8E1D-4D0A-A2D8-B79F6B394E65}.Debug|x64.Build.0 = Debug|x64
+		{8D29A86C-8E1D-4D0A-A2D8-B79F6B394E65}.Release|x64.ActiveCfg = Release|x64
+		{8D29A86C-8E1D-4D0A-A2D8-B79F6B394E65}.Release|x64.Build.0 = Release|x64
+		{F7E591EC-EDBF-4FE3-9A5B-7721572B7585}.Debug|x64.ActiveCfg = Debug|x64
+		{F7E591EC-EDBF-4FE3-9A5B-7721572B7585}.Debug|x64.Build.0 = Debug|x64
+		{F7E591EC-EDBF-4FE3-9A5B-7721572B7585}.Release|x64.ActiveCfg = Release|x64
+		{F7E591EC-EDBF-4FE3-9A5B-7721572B7585}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+EndGlobal
