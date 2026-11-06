@@ -301,7 +301,22 @@ namespace RoadTripMovie::FfmpegProcessor
         {
             if (cancellation.stop_requested())
                 throw std::runtime_error("Movie creation was cancelled.");
-            Check(avcodec_send_frame(encoder, frame), "Could not submit an encoded frame");
+            auto result = avcodec_send_frame(encoder, frame);
+            if (result < 0)
+            {
+                auto mediaType = encoder->codec_type == AVMEDIA_TYPE_AUDIO ? "audio" : "video";
+                auto action = std::string("Could not submit an encoded ") + mediaType +
+                    " frame to " + avcodec_get_name(encoder->codec_id);
+                if (encoder->codec_type == AVMEDIA_TYPE_AUDIO)
+                    action += " (samples=" + std::to_string(frame->nb_samples) +
+                        ", required=" + std::to_string(encoder->frame_size) +
+                        ", format=" + std::to_string(frame->format) + ")";
+                else
+                    action += " (size=" + std::to_string(frame->width) + "x" +
+                        std::to_string(frame->height) + ", format=" +
+                        std::to_string(frame->format) + ")";
+                ThrowAvError(result, action);
+            }
             Packet packet(av_packet_alloc());
             if (!packet)
                 throw std::bad_alloc();
@@ -389,7 +404,8 @@ namespace RoadTripMovie::FfmpegProcessor
                 ",asetpts=PTS-STARTPTS[silent_audio];";
             if (!hasAudio)
                 return silence + "[silent_audio]aformat=sample_fmts=fltp:sample_rates=44100:"
-                    "channel_layouts=stereo,asetpts=PTS-STARTPTS[audio_out]";
+                    "channel_layouts=stereo,asetpts=PTS-STARTPTS,"
+                    "asetnsamples=n=1024:p=1[audio_out]";
             return "[source]atrim=duration=" + std::to_string(duration) +
                 ",asetpts=PTS-STARTPTS,volume=" +
                 std::to_string(settings.videoAudioVolume) + "[source_audio];" +
@@ -398,7 +414,7 @@ namespace RoadTripMovie::FfmpegProcessor
                 "dropout_transition=0:normalize=0,atrim=duration=" +
                 std::to_string(duration) +
                 ",aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-                "asetpts=PTS-STARTPTS[audio_out]";
+                "asetpts=PTS-STARTPTS,asetnsamples=n=1024:p=1[audio_out]";
         }
 
         FilterGraph CreateGraph()
@@ -598,7 +614,7 @@ namespace RoadTripMovie::FfmpegProcessor
             "[music];[movie][music]amix=inputs=2:duration=first:dropout_transition=0:"
             "normalize=0,atrim=duration=" + std::to_string(duration) +
             ",aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-            "asetpts=PTS-STARTPTS[audio_out]";
+            "asetpts=PTS-STARTPTS,asetnsamples=n=1024:p=1[audio_out]";
         ParseFilterGraph(
             graph.get(),
             description,

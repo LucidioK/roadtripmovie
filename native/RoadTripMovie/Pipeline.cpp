@@ -264,6 +264,8 @@ namespace RoadTripMovie
         }
         if (cancellation.stop_requested())
             throw std::runtime_error("Movie creation was cancelled.");
+        if (firstError)
+            std::rethrow_exception(firstError);
 
         RemoveNotRenderedSegments(items, segments);
         if (progress)
