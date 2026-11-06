@@ -3,11 +3,13 @@
 extern "C"
 {
 #include <libavcodec/avcodec.h>
+#include <libavcodec/packet.h>
 #include <libavfilter/avfilter.h>
 #include <libavfilter/buffersink.h>
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
 #include <libavutil/channel_layout.h>
+#include <libavutil/display.h>
 #include <libavutil/error.h>
 #include <libavutil/opt.h>
 #include <libavutil/avstring.h>
@@ -15,7 +17,13 @@ extern "C"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <cstdlib>
+#include <cwctype>
+#include <fstream>
 #include <limits>
+#include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -115,6 +123,208 @@ namespace RoadTripMovie::FfmpegProcessor
             Check(avformat_find_stream_info(format, nullptr),
                 "Could not inspect " + file);
             return result;
+        }
+
+        std::optional<int> ReadJpegExifOrientation(Path const& path)
+        {
+            std::ifstream input(path, std::ios::binary);
+            if (!input)
+                return std::nullopt;
+
+            auto readByte = [&input]() -> std::optional<uint8_t>
+            {
+                char value{};
+                if (!input.get(value))
+                    return std::nullopt;
+                return static_cast<uint8_t>(static_cast<unsigned char>(value));
+            };
+            if (readByte() != 0xff || readByte() != 0xd8)
+                return std::nullopt;
+
+            while (input)
+            {
+                auto prefix = readByte();
+                if (!prefix)
+                    break;
+                if (*prefix != 0xff)
+                    continue;
+
+                std::optional<uint8_t> marker;
+                do
+                {
+                    marker = readByte();
+                } while (marker && *marker == 0xff);
+                if (!marker || *marker == 0xda || *marker == 0xd9)
+                    break;
+                if (*marker == 0x01 || (*marker >= 0xd0 && *marker <= 0xd7))
+                    continue;
+
+                auto high = readByte();
+                auto low = readByte();
+                if (!high || !low)
+                    break;
+                auto length = (static_cast<unsigned int>(*high) << 8) | *low;
+                if (length < 2)
+                    break;
+                auto payloadLength = length - 2;
+                if (*marker != 0xe1 || payloadLength < 14)
+                {
+                    input.seekg(payloadLength, std::ios::cur);
+                    continue;
+                }
+
+                std::vector<uint8_t> payload(payloadLength);
+                if (!input.read(
+                        reinterpret_cast<char*>(payload.data()),
+                        static_cast<std::streamsize>(payload.size())))
+                    break;
+                constexpr uint8_t exifSignature[]{ 'E', 'x', 'i', 'f', 0, 0 };
+                if (!std::equal(std::begin(exifSignature), std::end(exifSignature), payload.begin()))
+                    continue;
+
+                auto tiff = std::span<uint8_t const>(payload).subspan(6);
+                if (tiff.size() < 8)
+                    continue;
+                bool littleEndian;
+                if (tiff[0] == 'I' && tiff[1] == 'I')
+                    littleEndian = true;
+                else if (tiff[0] == 'M' && tiff[1] == 'M')
+                    littleEndian = false;
+                else
+                    continue;
+
+                auto read16 = [littleEndian, tiff](std::size_t offset) -> std::optional<uint16_t>
+                {
+                    if (offset > tiff.size() || tiff.size() - offset < 2)
+                        return std::nullopt;
+                    auto first = tiff[offset];
+                    auto second = tiff[offset + 1];
+                    return littleEndian
+                        ? static_cast<uint16_t>(first | (static_cast<uint16_t>(second) << 8))
+                        : static_cast<uint16_t>((static_cast<uint16_t>(first) << 8) | second);
+                };
+                auto read32 = [littleEndian, tiff](std::size_t offset) -> std::optional<uint32_t>
+                {
+                    if (offset > tiff.size() || tiff.size() - offset < 4)
+                        return std::nullopt;
+                    uint32_t value{};
+                    for (std::size_t index = 0; index < 4; ++index)
+                    {
+                        auto shift = littleEndian ? index * 8 : (3 - index) * 8;
+                        value |= static_cast<uint32_t>(tiff[offset + index]) << shift;
+                    }
+                    return value;
+                };
+
+                if (read16(2) != 42)
+                    continue;
+                auto directoryOffset = read32(4);
+                if (!directoryOffset || *directoryOffset > tiff.size())
+                    continue;
+                auto entryCount = read16(*directoryOffset);
+                if (!entryCount)
+                    continue;
+                auto entriesOffset = static_cast<std::size_t>(*directoryOffset) + 2;
+                for (uint16_t index = 0; index < *entryCount; ++index)
+                {
+                    auto entryOffset = entriesOffset + static_cast<std::size_t>(index) * 12;
+                    auto tag = read16(entryOffset);
+                    if (!tag)
+                        break;
+                    if (*tag != 0x0112)
+                        continue;
+                    auto type = read16(entryOffset + 2);
+                    auto count = read32(entryOffset + 4);
+                    if (!type || *type != 3 || !count || *count == 0)
+                        break;
+                    auto valueOffset = *count == 1
+                        ? std::optional<uint32_t>(static_cast<uint32_t>(entryOffset + 8))
+                        : read32(entryOffset + 8);
+                    if (!valueOffset)
+                        break;
+                    auto orientation = read16(*valueOffset);
+                    if (orientation && *orientation >= 1 && *orientation <= 8)
+                        return *orientation;
+                    break;
+                }
+            }
+            return std::nullopt;
+        }
+
+        std::string OrientationFilter(Path const& path, bool photo)
+        {
+            std::optional<int> exifOrientation;
+            auto extension = path.extension().wstring();
+            std::transform(extension.begin(), extension.end(), extension.begin(),
+                [](wchar_t character) { return static_cast<wchar_t>(std::towlower(character)); });
+            if (photo && (extension == L".jpg" || extension == L".jpeg"))
+                exifOrientation = ReadJpegExifOrientation(path);
+
+            auto input = OpenInput(path);
+            for (unsigned int index = 0; index < input->nb_streams; ++index)
+            {
+                auto stream = input->streams[index];
+                if (stream->codecpar->codec_type != AVMEDIA_TYPE_VIDEO)
+                    continue;
+
+                auto matrix = av_packet_side_data_get(
+                    stream->codecpar->coded_side_data,
+                    stream->codecpar->nb_coded_side_data,
+                    AV_PKT_DATA_DISPLAYMATRIX);
+                if (matrix && matrix->size >= 9 * sizeof(int32_t))
+                {
+                    auto angle = av_display_rotation_get(
+                        reinterpret_cast<int32_t const*>(matrix->data));
+                    if (std::isfinite(angle))
+                    {
+                        auto quarterTurns = static_cast<int>(
+                            std::lround(angle / 90.0)) % 4;
+                        if (quarterTurns < 0)
+                            quarterTurns += 4;
+                        if (quarterTurns == 1)
+                            return "transpose=cclock,";
+                        if (quarterTurns == 2)
+                            return "hflip,vflip,";
+                        if (quarterTurns == 3)
+                            return "transpose=clock,";
+                    }
+                }
+
+                auto rotation = av_dict_get(stream->metadata, "rotate", nullptr, 0);
+                if (rotation)
+                {
+                    char* end{};
+                    auto angle = std::strtod(rotation->value, &end);
+                    if (end != rotation->value && *end == '\0' && std::isfinite(angle))
+                    {
+                        auto quarterTurns = static_cast<int>(
+                            std::lround(angle / 90.0)) % 4;
+                        if (quarterTurns < 0)
+                            quarterTurns += 4;
+                        if (quarterTurns == 1)
+                            return "transpose=cclock,";
+                        if (quarterTurns == 2)
+                            return "hflip,vflip,";
+                        if (quarterTurns == 3)
+                            return "transpose=clock,";
+                    }
+                }
+                break;
+            }
+
+            if (!exifOrientation || *exifOrientation == 1)
+                return {};
+            switch (*exifOrientation)
+            {
+            case 2: return "hflip,";
+            case 3: return "hflip,vflip,";
+            case 4: return "vflip,";
+            case 5: return "transpose=cclock_flip,";
+            case 6: return "transpose=clock,";
+            case 7: return "transpose=clock_flip,";
+            case 8: return "transpose=cclock,";
+            default: return {};
+            }
         }
 
         OutputFormat CreateOutput(Path const& path)
@@ -382,10 +592,12 @@ namespace RoadTripMovie::FfmpegProcessor
         std::string VideoFilterDescription(
             PipelineSettings const& settings,
             double duration,
-            bool photo)
+            bool photo,
+            std::string const& orientation)
         {
             return std::string("[video]") +
                 (photo ? "loop=loop=-1:size=1:start=0," : "") +
+                orientation +
                 "fps=fps=" + std::to_string(settings.fps) +
                 ",scale=" + std::to_string(settings.width) + ":" +
                 std::to_string(settings.height) + ":force_original_aspect_ratio=decrease" +
@@ -459,6 +671,7 @@ namespace RoadTripMovie::FfmpegProcessor
     {
         CheckCancelled(cancellation);
         auto graph = CreateGraph();
+        auto orientation = OrientationFilter(item.file, item.photo);
         auto videoSource = CreateMediaSource(
             graph.get(), "movie", "video_source", item.file);
         auto silenceSource = CreateSource(
@@ -477,7 +690,7 @@ namespace RoadTripMovie::FfmpegProcessor
             sources.emplace_back("source", audioSource);
         ParseFilterGraph(
             graph.get(),
-            VideoFilterDescription(settings, item.duration, item.photo) + ";" +
+            VideoFilterDescription(settings, item.duration, item.photo, orientation) + ";" +
                 SegmentAudioFilterDescription(item.hasAudio, settings, item.duration),
             sources,
             { { "video_out", videoSink }, { "audio_out", audioSink } });
