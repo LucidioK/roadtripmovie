@@ -2,8 +2,13 @@ __pycache__/
 *.pyc
 .venv/
 .venv_check/
+.venv_check2/
 .map_cache/
+.vscode/
+*.user
+*.assets.cache
 native/.vs/
+native/.vscode/
 native/bin/
 native/obj/
 native/artifacts/
@@ -15,3 +20,4 @@ native/RoadTripMovie/obj/
 native/RoadTripMovie/Generated Files/
 native/RoadTripMovie.Package/bin/
 native/RoadTripMovie.Package/obj/
+native/RoadTripMovie.Package/BundleArtifacts/
