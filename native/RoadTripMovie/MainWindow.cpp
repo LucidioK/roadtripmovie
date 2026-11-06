@@ -69,18 +69,18 @@ namespace RoadTripMovie
 
         inputFolderBox = TextBox();
         AddTextField(form, L"Media folder", inputFolderBox);
-        AddBrowseButton(form, L"Browse media folder…",
+        AddBrowseButton(form, L"Browse media folder",
             [this](auto&&, auto&&) { BrowseFolderAsync(); });
 
         musicFileBox = TextBox();
         AddTextField(form, L"Background music", musicFileBox);
-        AddBrowseButton(form, L"Browse music…",
+        AddBrowseButton(form, L"Browse music",
             [this](auto&&, auto&&) { BrowseMusicAsync(); });
 
         outputFileBox = TextBox();
         outputFileBox.Text(L"roadtrip_movie.mp4");
         AddTextField(form, L"Output video", outputFileBox);
-        AddBrowseButton(form, L"Save as…",
+        AddBrowseButton(form, L"Save as",
             [this](auto&&, auto&&) { BrowseOutputAsync(); });
 
         photoDurationBox = AddNumberField(form, L"Photo duration (seconds)", 5, 0.1, 3600);
@@ -231,7 +231,7 @@ namespace RoadTripMovie
             auto settings = ReadSettings();
             cancellation = Pipeline::CancellationSource{};
             SetRunning(true);
-            SetStatus(L"Starting…");
+            SetStatus(L"Starting");
             auto token = cancellation.get_token();
             auto dispatcher = window.DispatcherQueue();
             std::weak_ptr<MainWindow> weak = shared_from_this();
@@ -277,6 +277,6 @@ namespace RoadTripMovie
     void MainWindow::Cancel()
     {
         cancellation.request_stop();
-        SetStatus(L"Cancelling after the current FFmpeg operation…");
+        SetStatus(L"Cancelling after the current FFmpeg operation");
     }
 }

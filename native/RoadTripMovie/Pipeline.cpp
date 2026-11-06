@@ -203,7 +203,7 @@ namespace RoadTripMovie
         if (items.empty())
             throw std::runtime_error("No supported photos or videos could be read from the selected folder.");
         if (progress)
-            progress(L"Found " + std::to_wstring(items.size()) + L" items. Rendering segments…");
+            progress(L"Found " + std::to_wstring(items.size()) + L" items. Rendering segments");
 
         TemporaryDirectory temporary;
         std::vector<path> segments(items.size());
@@ -267,7 +267,7 @@ namespace RoadTripMovie
 
         RemoveNotRenderedSegments(items, segments);
         if (progress)
-            progress(L"Joining segments and mixing background music…");
+            progress(L"Joining segments and mixing background music");
         auto joined = temporary.Path() / L"joined.mp4";
 
         FfmpegProcessor::Concatenate(segments, joined, cancellation);
