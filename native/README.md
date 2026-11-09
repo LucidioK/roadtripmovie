@@ -15,6 +15,9 @@ and requires an internet connection the first time an area is rendered. Segment 
 are written to independent files and joined in chronological order. Worker count defaults to the number
 of logical processors minus one, capped at four workers (two FFmpeg encoder threads per
 segment) to avoid saturating memory and CPU.
+When GPS coordinates are available, each segment also displays the nearest city at the
+bottom center. The lookup uses the bundled `worldcities-geo-simp.csv` dataset and works
+offline.
 
 ## FFmpeg libraries
 
@@ -59,5 +62,4 @@ The script does not download a signing certificate. An MSIX signed with a local
 development certificate is suitable for testing only; use the Store-compatible publisher
 certificate and submission workflow for publishing.
 
-The initial native UI exposes core render settings. Offline closest-city lookup and its
-bottom-center text overlay are not yet implemented in this WinUI port.
+The initial native UI exposes core render settings.

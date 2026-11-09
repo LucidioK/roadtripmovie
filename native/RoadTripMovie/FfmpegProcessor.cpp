@@ -1,4 +1,5 @@
 #include "FfmpegProcessor.h"
+#include "CityLookup.h"
 #include "MapThumbnail.h"
 
 extern "C"
@@ -38,6 +39,24 @@ namespace RoadTripMovie::FfmpegProcessor
     namespace
     {
         using Path = std::filesystem::path;
+
+        class TemporaryDirectoryCleanup
+        {
+        public:
+            explicit TemporaryDirectoryCleanup(Path path) : path_(std::move(path)) {}
+
+            ~TemporaryDirectoryCleanup()
+            {
+                std::error_code error;
+                std::filesystem::remove_all(path_, error);
+            }
+
+            TemporaryDirectoryCleanup(TemporaryDirectoryCleanup const&) = delete;
+            TemporaryDirectoryCleanup& operator=(TemporaryDirectoryCleanup const&) = delete;
+
+        private:
+            Path path_;
+        };
 
         struct InputFormatDeleter
         {
@@ -770,7 +789,8 @@ namespace RoadTripMovie::FfmpegProcessor
             double duration,
             bool photo,
             std::string const& orientation,
-            bool hasMap)
+            bool hasMap,
+            bool hasCityLabel)
         {
             auto description = std::string("[video]") +
                 (photo ? "loop=loop=-1:size=1:start=0," : "") +
@@ -781,15 +801,24 @@ namespace RoadTripMovie::FfmpegProcessor
                 ",pad=" + std::to_string(settings.width) + ":" +
                 std::to_string(settings.height) + ":(ow-iw)/2:(oh-ih)/2" +
                 ",setsar=1,format=yuv420p[base_video]";
+            auto currentVideo = std::string("base_video");
             if (hasMap)
             {
                 description += ";[map]loop=loop=-1:size=1:start=0,scale=" +
                     std::to_string(settings.mapWidth) + ":" +
                     std::to_string(settings.mapHeight) +
                     "[map_image];[base_video][map_image]overlay=x=W-w-12:y=12:"
-                    "shortest=1[composited]";
+                    "shortest=1[video_with_map]";
+                currentVideo = "video_with_map";
             }
-            description += hasMap ? ";[composited]trim=duration=" : ";[base_video]trim=duration=";
+            if (hasCityLabel)
+            {
+                description += ";[city]loop=loop=-1:size=1:start=0,format=rgba[city_image];[" +
+                    currentVideo + "][city_image]overlay=x=(W-w)/2:y=H-h:shortest=1"
+                    "[video_with_city]";
+                currentVideo = "video_with_city";
+            }
+            description += ";[" + currentVideo + "]trim=duration=";
             description += std::to_string(duration) +
                 ",setpts=PTS-STARTPTS[video_out]";
             return description;
@@ -1002,6 +1031,18 @@ namespace RoadTripMovie::FfmpegProcessor
             mapPath = MapThumbnail::Render(
                 *item.location, settings.mapCacheDirectory,
                 settings.mapWidth, settings.mapHeight, settings.mapZoom);
+        std::optional<Path> cityLabelPath;
+        std::optional<TemporaryDirectoryCleanup> cityLabelCleanup;
+        if (item.location)
+        {
+            auto cityName = CityLookup::NearestCity(*item.location);
+            auto cityLabelDirectory = target.parent_path() /
+                (target.stem().wstring() + L"_city_label");
+            cityLabelCleanup.emplace(cityLabelDirectory);
+            cityLabelPath = MapThumbnail::RenderCityLabel(
+                cityName, cityLabelDirectory,
+                settings.width, settings.height);
+        }
         auto graph = CreateGraph();
         auto orientation = OrientationFilter(item.file, item.photo);
         auto videoSource = CreateMediaSource(
@@ -1015,14 +1056,17 @@ namespace RoadTripMovie::FfmpegProcessor
         AVFilterContext* mapSource{};
         if (mapPath)
             mapSource = CreateMediaSource(graph.get(), "movie", "map_source", *mapPath);
+        AVFilterContext* citySource{};
+        if (cityLabelPath)
+            citySource = CreateMediaSource(graph.get(), "movie", "city_source", *cityLabelPath);
 
         for (auto filter : {
              "fps", "scale", "pad", "setsar", "format", "trim", "setpts",
              "atrim", "asetpts", "aformat", "asetnsamples" })
         RequireFilter(filter);
-        if (item.photo || mapSource)
+        if (item.photo || mapSource || citySource)
         RequireFilter("loop");
-        if (mapSource)
+        if (mapSource || citySource)
         RequireFilter("overlay");
         if (item.hasAudio)
         {
@@ -1045,10 +1089,13 @@ namespace RoadTripMovie::FfmpegProcessor
             sources.emplace_back("source", audioSource);
         if (mapSource)
             sources.emplace_back("map", mapSource);
+        if (citySource)
+            sources.emplace_back("city", citySource);
         ParseFilterGraph(
             graph.get(),
             VideoFilterDescription(
-                settings, item.duration, item.photo, orientation, mapSource != nullptr) + ";" +
+                settings, item.duration, item.photo, orientation,
+                mapSource != nullptr, citySource != nullptr) + ";" +
                 SegmentAudioFilterDescription(item.hasAudio, settings, item.duration),
             sources,
             { { "video_out", videoSink }, { "audio_out", audioSink } });

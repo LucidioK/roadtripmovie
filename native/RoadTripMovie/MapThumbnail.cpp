@@ -315,4 +315,74 @@ namespace RoadTripMovie::MapThumbnail
         }
         return outputPath;
     }
+
+    std::filesystem::path RenderCityLabel(
+        std::string const& cityName,
+        std::filesystem::path const& cacheDirectory,
+        int width,
+        int height)
+    {
+        if (cityName.empty() || width <= 0 || height <= 0)
+            throw std::invalid_argument("The city label text or dimensions are invalid.");
+        auto wideLength = MultiByteToWideChar(
+            CP_UTF8, MB_ERR_INVALID_CHARS, cityName.data(),
+            static_cast<int>(cityName.size()), nullptr, 0);
+        if (wideLength <= 0)
+            throw std::runtime_error("The nearest city name is not valid UTF-8.");
+        std::wstring wideName(static_cast<std::size_t>(wideLength), L'\0');
+        if (MultiByteToWideChar(
+                CP_UTF8, MB_ERR_INVALID_CHARS, cityName.data(),
+                static_cast<int>(cityName.size()), wideName.data(), wideLength) != wideLength)
+            throw std::runtime_error("Could not decode the nearest city name.");
+
+        auto labelWidth = std::max(1, width * 8 / 10);
+        auto labelHeight = std::max(1, height / 10);
+        auto key = std::to_wstring(std::hash<std::string>{}(cityName)) + L"_" +
+            std::to_wstring(labelWidth) + L"x" + std::to_wstring(labelHeight) + L".bmp";
+        auto labelDirectory = cacheDirectory / L"city_labels";
+        auto outputPath = labelDirectory / key;
+        if (std::filesystem::is_regular_file(outputPath))
+            return outputPath;
+
+        std::filesystem::create_directories(labelDirectory);
+        GdiPlus();
+        Gdiplus::Bitmap label(labelWidth, labelHeight, PixelFormat32bppARGB);
+        CheckGdi(label.GetLastStatus(), "Could not create a city label image");
+        Gdiplus::Graphics graphics(&label);
+        CheckGdi(graphics.GetLastStatus(), "Could not initialize city label drawing");
+        graphics.Clear(Gdiplus::Color(0, 0, 0, 0));
+        graphics.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
+
+        Gdiplus::Font font(L"Arial", 24.0f, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+        Gdiplus::SolidBrush foreground(Gdiplus::Color(255, 255, 255, 0));
+        Gdiplus::StringFormat format;
+        format.SetAlignment(Gdiplus::StringAlignmentCenter);
+        format.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+        format.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
+        Gdiplus::RectF bounds(
+            0.0f, 0.0f, static_cast<Gdiplus::REAL>(labelWidth),
+            static_cast<Gdiplus::REAL>(labelHeight));
+        CheckGdi(graphics.DrawString(
+            wideName.c_str(), static_cast<INT>(wideName.size()), &font,
+            bounds, &format, &foreground), "Could not draw the nearest city name");
+
+        auto temporary = outputPath;
+        temporary += L"." + std::to_wstring(GetCurrentProcessId()) + L"." +
+            std::to_wstring(std::hash<std::thread::id>{}(std::this_thread::get_id())) +
+            L".tmp.bmp";
+        auto encoder = BitmapEncoderClsid();
+        CheckGdi(label.Save(temporary.c_str(), &encoder, nullptr),
+            "Could not save the city label image");
+        if (!MoveFileExW(
+                temporary.c_str(), outputPath.c_str(),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        {
+            auto error = GetLastError();
+            DeleteFileW(temporary.c_str());
+            throw std::system_error(
+                static_cast<int>(error), std::system_category(),
+                "Could not cache the city label image");
+        }
+        return outputPath;
+    }
 }

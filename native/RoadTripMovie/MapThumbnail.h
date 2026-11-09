@@ -12,4 +12,10 @@ namespace RoadTripMovie::MapThumbnail
         int width,
         int height,
         int zoom);
+
+    std::filesystem::path RenderCityLabel(
+        std::string const& cityName,
+        std::filesystem::path const& cacheDirectory,
+        int width,
+        int height);
 }

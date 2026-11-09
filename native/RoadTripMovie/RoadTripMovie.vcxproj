@@ -85,6 +85,7 @@
     <ClCompile Include="Pipeline.cpp" />
     <ClCompile Include="FfmpegProcessor.cpp" />
     <ClCompile Include="MapThumbnail.cpp" />
+    <ClCompile Include="CityLookup.cpp" />
     <ClCompile Include="$(XamlGeneratedOutputPath)XamlTypeInfo.g.cpp" />
     <ClCompile Include="$(XamlGeneratedOutputPath)XamlTypeInfo.Impl.g.cpp" />
     <ClCompile Include="..\..\third_party\LibFFmpeg\src\lib\**\*.cpp">
@@ -98,7 +99,13 @@
     <ClInclude Include="Pipeline.h" />
     <ClInclude Include="FfmpegProcessor.h" />
     <ClInclude Include="MapThumbnail.h" />
+    <ClInclude Include="CityLookup.h" />
     <ClInclude Include="pch.h" />
+    <Content Include="..\..\worldcities-geo-simp.csv">
+      <TargetPath>worldcities-geo-simp.csv</TargetPath>
+      <Link>worldcities-geo-simp.csv</Link>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="$(WindowsAppSDKPackageDir)\runtimes\win-x64\native\Microsoft.WindowsAppRuntime.Bootstrap.dll">
       <Link>Microsoft.WindowsAppRuntime.Bootstrap.dll</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
