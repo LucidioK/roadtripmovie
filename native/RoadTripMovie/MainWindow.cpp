@@ -86,10 +86,9 @@ namespace RoadTripMovie
     MainWindow::MainWindow()
     {
         window = Window();
-        // 2. Cast the presenter to an OverlappedPresenter
         if (auto overlappedPresenter{ window.AppWindow().Presenter().try_as<OverlappedPresenter>() })
         {
-            // 3. Disable the maximize and resize capabilities
+            // Disable the maximize and resize capabilities
             overlappedPresenter.IsMaximizable(false);
             overlappedPresenter.IsResizable(false); // Dialogs shouldn't be resizable
         }
@@ -97,57 +96,16 @@ namespace RoadTripMovie
 
         StackPanel form;
         form.Spacing(12);
-        //form.MaxWidth(420);
         form.HorizontalAlignment(HorizontalAlignment::Stretch);
         form.VerticalAlignment(VerticalAlignment::Stretch);
-//        form.HorizontalAlignment(HorizontalAlignment::Left);
 
-        TextBlock title;
-        title.Text(L"Create a road-trip movie");
-        title.FontSize(28);
-        form.Children().Append(title);
+        AddTitleAndIntroduction(form);
 
-        TextBlock introduction;
-        introduction.Text(L"Choose a folder of photos and videos, a music track, and an MP4 destination.");
-        introduction.TextWrapping(TextWrapping::Wrap);
-        form.Children().Append(introduction);
+        AddFileInputBoxes(form);
 
-		inputFolderBox = AddTextFieldWithBrowse(form, L"Media folder",
-			[this](auto&&, auto&&) { BrowseFolderAsync(); });
-		musicFileBox = AddTextFieldWithBrowse(form, L"Background music",
-			[this](auto&&, auto&&) { BrowseMusicAsync(); });
+        AddNumberFieldBoxes(form);
 
-        outputFileBox = AddTextFieldWithBrowse(form, L"Output video",
-            [this](auto&&, auto&&) { BrowseOutputAsync(); }, L"Save as");
-
-        photoDurationBox = AddNumberField(form, L"Photo duration (seconds)", 5, 0.1, 3600);
-        videoLimitBox = AddNumberField(form, L"Video cap (seconds, 0 = full clip)", 0, 0, 86400);
-        widthBox = AddNumberField(form, L"Output width", 1920, 16, 7680);
-        heightBox = AddNumberField(form, L"Output height", 1080, 16, 4320);
-        fpsBox = AddNumberField(form, L"Frames per second", 30, 1, 120);
-        videoVolumeBox = AddNumberField(form, L"Video audio volume", 0.25, 0, 10);
-        musicVolumeBox = AddNumberField(form, L"Music volume", 1, 0, 10);
-
-        StackPanel actions;
-        actions.Orientation(Orientation::Horizontal);
-        actions.HorizontalAlignment(HorizontalAlignment::Right);
-        actions.Spacing(8);
-        cancelButton = Button();
-        cancelButton.Content(box_value(L"Cancel"));
-        cancelButton.IsEnabled(false);
-        cancelButton.Click([this](auto&&, auto&&) { Cancel(); });
-        actions.Children().Append(cancelButton);
-        startButton = Button();
-        startButton.Content(box_value(L"Create movie"));
-        startButton.Click([this](auto&&, auto&&) { Start(); });
-        actions.Children().Append(startButton);
-
-        progressIndicator = ProgressRing();
-        progressIndicator.Width(28);
-        progressIndicator.Height(28);
-        progressIndicator.IsActive(false);
-        actions.Children().Append(progressIndicator);
-        form.Children().Append(actions);
+        AddActionButtons(form);
 
         statusText = TextBlock();
         statusText.Text(L"Ready");
@@ -161,6 +119,64 @@ namespace RoadTripMovie
         scroll.Content(content);
         window.Content(scroll);
         window.AppWindow().Resize(Windows::Graphics::SizeInt32{ 550, 700 });
+    }
+
+    void MainWindow::AddTitleAndIntroduction(winrt::Microsoft::UI::Xaml::Controls::StackPanel& form)
+    {
+        TextBlock title;
+        title.Text(L"Create a road-trip movie");
+        title.FontSize(28);
+        form.Children().Append(title);
+
+        TextBlock introduction;
+        introduction.Text(L"Choose a folder of photos and videos, a music track, and an MP4 destination.");
+        introduction.TextWrapping(TextWrapping::Wrap);
+        form.Children().Append(introduction);
+    }
+
+    void MainWindow::AddFileInputBoxes(winrt::Microsoft::UI::Xaml::Controls::StackPanel& form)
+    {
+        inputFolderBox = AddTextFieldWithBrowse(form, L"Media folder",
+            [this](auto&&, auto&&) { BrowseFolderAsync(); });
+        musicFileBox = AddTextFieldWithBrowse(form, L"Background music",
+            [this](auto&&, auto&&) { BrowseMusicAsync(); });
+        outputFileBox = AddTextFieldWithBrowse(form, L"Output video",
+            [this](auto&&, auto&&) { BrowseOutputAsync(); }, L"Save as");
+    }
+
+    void MainWindow::AddNumberFieldBoxes(winrt::Microsoft::UI::Xaml::Controls::StackPanel& form)
+    {
+        photoDurationBox = AddNumberField(form, L"Photo duration (seconds)", 5, 0.1, 3600);
+        videoLimitBox = AddNumberField(form, L"Video cap (seconds, 0 = full clip)", 0, 0, 86400);
+        widthBox = AddNumberField(form, L"Output width", 1920, 16, 7680);
+        heightBox = AddNumberField(form, L"Output height", 1080, 16, 4320);
+        fpsBox = AddNumberField(form, L"Frames per second", 30, 1, 120);
+        videoVolumeBox = AddNumberField(form, L"Video audio volume", 0.25, 0, 10);
+        musicVolumeBox = AddNumberField(form, L"Music volume", 1, 0, 10);
+    }
+
+
+    void MainWindow::AddActionButtons(winrt::Microsoft::UI::Xaml::Controls::StackPanel& form)
+    {
+        StackPanel actions;
+        actions.Orientation(Orientation::Horizontal);
+        actions.HorizontalAlignment(HorizontalAlignment::Right);
+        actions.Spacing(8);
+        cancelButton = Button();
+        cancelButton.Content(box_value(L"Cancel"));
+        cancelButton.IsEnabled(false);
+        cancelButton.Click([this](auto&&, auto&&) { Cancel(); });
+        actions.Children().Append(cancelButton);
+        progressIndicator = ProgressRing();
+        progressIndicator.Width(28);
+        progressIndicator.Height(28);
+        progressIndicator.IsActive(false);
+        actions.Children().Append(progressIndicator);
+        form.Children().Append(actions);
+        startButton = Button();
+        startButton.Content(box_value(L"Create movie"));
+        startButton.Click([this](auto&&, auto&&) { Start(); });
+        actions.Children().Append(startButton);
     }
 
     MainWindow::~MainWindow()

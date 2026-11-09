@@ -42,5 +42,9 @@ namespace RoadTripMovie
         void SetRunning(bool value);
         void SetStatus(std::wstring text);
         ::RoadTripMovie::PipelineSettings ReadSettings() const;
+        void AddActionButtons(winrt::Microsoft::UI::Xaml::Controls::StackPanel& form);
+        void AddTitleAndIntroduction(winrt::Microsoft::UI::Xaml::Controls::StackPanel& form);
+        void AddNumberFieldBoxes(winrt::Microsoft::UI::Xaml::Controls::StackPanel& form);
+        void AddFileInputBoxes(winrt::Microsoft::UI::Xaml::Controls::StackPanel& form);
     };
 }
