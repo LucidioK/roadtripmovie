@@ -7,9 +7,12 @@ This is the C++/WinRT WinUI 3 desktop application and MSIX packaging project. Op
 The pipeline scans `.jpg`, `.jpeg`, `.png`, `.heic`, `.heif`, `.mp4`, `.mov`, `.avi`,
 `.mkv`, and `.m4v` files, sorts them by file modified time, and uses LibFFmpeg to inspect
 video duration and audio streams. It renders per-item MPEG-4/AAC segments concurrently
-with FFmpeg's in-process C API, joins them without re-encoding, then loops and mixes the
-selected music track into the final MP4 in-process. Segment results are written to
-independent files and joined in chronological order. Worker count defaults to the number
+with FFmpeg's in-process C API, adds a pinned OpenStreetMap inset when GPS coordinates
+are available, joins the segments without re-encoding, then loops and mixes the selected
+music track into the final MP4 in-process. Map tiles and rendered thumbnails are cached
+under `.map_cache` next to the output video. The inset includes OpenStreetMap attribution
+and requires an internet connection the first time an area is rendered. Segment results
+are written to independent files and joined in chronological order. Worker count defaults to the number
 of logical processors minus one, capped at four workers (two FFmpeg encoder threads per
 segment) to avoid saturating memory and CPU.
 
@@ -56,6 +59,5 @@ The script does not download a signing certificate. An MSIX signed with a local
 development certificate is suitable for testing only; use the Store-compatible publisher
 certificate and submission workflow for publishing.
 
-The initial native UI exposes core render settings. Python-only features that need
-additional platform-specific work (OSM map thumbnails and offline city-name lookup) are
-not yet implemented in this WinUI port.
+The initial native UI exposes core render settings. Offline closest-city lookup and its
+bottom-center text overlay are not yet implemented in this WinUI port.

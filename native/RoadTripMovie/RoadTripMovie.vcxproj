@@ -75,7 +75,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>windowsapp.lib;$(WindowsAppSDKPackageDir)\lib\win10-x64\Microsoft.WindowsAppRuntime.Bootstrap.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>windowsapp.lib;gdiplus.lib;winhttp.lib;$(WindowsAppSDKPackageDir)\lib\win10-x64\Microsoft.WindowsAppRuntime.Bootstrap.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -84,6 +84,7 @@
     <ClCompile Include="MainWindow.cpp" />
     <ClCompile Include="Pipeline.cpp" />
     <ClCompile Include="FfmpegProcessor.cpp" />
+    <ClCompile Include="MapThumbnail.cpp" />
     <ClCompile Include="$(XamlGeneratedOutputPath)XamlTypeInfo.g.cpp" />
     <ClCompile Include="$(XamlGeneratedOutputPath)XamlTypeInfo.Impl.g.cpp" />
     <ClCompile Include="..\..\third_party\LibFFmpeg\src\lib\**\*.cpp">
@@ -96,6 +97,7 @@
     <ClInclude Include="MainWindow.h" />
     <ClInclude Include="Pipeline.h" />
     <ClInclude Include="FfmpegProcessor.h" />
+    <ClInclude Include="MapThumbnail.h" />
     <ClInclude Include="pch.h" />
     <Content Include="$(WindowsAppSDKPackageDir)\runtimes\win-x64\native\Microsoft.WindowsAppRuntime.Bootstrap.dll">
       <Link>Microsoft.WindowsAppRuntime.Bootstrap.dll</Link>

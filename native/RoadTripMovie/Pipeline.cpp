@@ -139,6 +139,8 @@ namespace RoadTripMovie
             if (settings.width <= 0 || settings.height <= 0 || settings.fps <= 0 ||
                 settings.photoDuration <= 0.0 || settings.videoAudioVolume < 0.0 ||
                 settings.musicVolume < 0.0 ||
+                (settings.showMap && (settings.mapWidth <= 0 || settings.mapHeight <= 0 ||
+                    settings.mapZoom < 0 || settings.mapZoom > 19)) ||
                 (settings.maxVideoDuration && *settings.maxVideoDuration <= 0.0))
                 throw std::invalid_argument("One or more movie settings are outside their valid range.");
         }
@@ -174,7 +176,9 @@ namespace RoadTripMovie
                         if (settings.maxVideoDuration)
                             duration = std::min(duration, *settings.maxVideoDuration);
                     }
-                    items.push_back({ file, photo, modified, duration, hasAudio, 0, false });
+                    auto location = FfmpegProcessor::ReadLocation(file, photo);
+                    items.push_back({
+                        file, photo, modified, duration, hasAudio, location, 0, false });
                 }
                 catch (std::exception const& error)
                 {
@@ -198,6 +202,9 @@ namespace RoadTripMovie
         ProgressCallback const& progress)
     {
         ValidateSettings(settings);
+        if (cancellation.stop_requested())
+            throw std::runtime_error("Movie creation was cancelled.");
+        FfmpegProcessor::ValidateAudio(settings.musicPath);
         auto libraries = LoadLibFFmpeg(settings.ffmpegDirectory);
         auto items = ScanMedia(settings, libraries, cancellation, progress);
         if (items.empty())
@@ -206,6 +213,14 @@ namespace RoadTripMovie
             progress(L"Found " + std::to_wstring(items.size()) + L" items. Rendering segments");
 
         TemporaryDirectory temporary;
+        auto renderSettings = settings;
+        if (renderSettings.mapCacheDirectory.empty())
+        {
+            auto outputDirectory = settings.outputPath.parent_path();
+            if (outputDirectory.empty())
+                outputDirectory = current_path();
+            renderSettings.mapCacheDirectory = outputDirectory / L".map_cache";
+        }
         std::vector<path> segments(items.size());
         std::atomic_size_t next{ 0 };
         std::atomic_size_t completed{ 0 };
@@ -234,8 +249,9 @@ namespace RoadTripMovie
                             (L"segment_" + std::to_wstring(index) + L".mp4");
                         FfmpegProcessor::RenderSegment(
                             { items[index].file, items[index].photo,
-                                items[index].duration, items[index].hasAudio },
-                            settings, segment, cancellation);
+                                items[index].duration, items[index].hasAudio,
+                                items[index].location },
+                            renderSettings, segment, cancellation);
                         segments[index] = segment;
                         auto count = completed.fetch_add(1) + 1;
                         if (progress)
@@ -288,7 +304,7 @@ namespace RoadTripMovie
 
     void Pipeline::RemoveNotRenderedSegments(std::vector<MediaItem>& items, std::vector<std::filesystem::path>& segments)
     {
-        int renderedCount = count_if(items.begin(), items.end(), [](MediaItem const& item) { return item.rendered; });
+        int renderedCount = (int)count_if(items.begin(), items.end(), [](MediaItem const& item) { return item.rendered; });
         std::vector<MediaItem> itemsActuallyRendered(renderedCount);
         std::vector<std::filesystem::path> segmentsActuallyRendered(renderedCount);
         for (int i = 0, j = 0; i < items.size(); i++)

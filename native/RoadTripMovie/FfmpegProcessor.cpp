@@ -1,4 +1,5 @@
 #include "FfmpegProcessor.h"
+#include "MapThumbnail.h"
 
 extern "C"
 {
@@ -11,17 +12,21 @@ extern "C"
 #include <libavutil/channel_layout.h>
 #include <libavutil/display.h>
 #include <libavutil/error.h>
+#include <libavutil/log.h>
 #include <libavutil/opt.h>
 #include <libavutil/avstring.h>
 }
 
 #include <algorithm>
 #include <cmath>
+#include <cstdarg>
+#include <cstdio>
 #include <cstdint>
 #include <cstdlib>
 #include <cwctype>
 #include <fstream>
 #include <limits>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -94,6 +99,68 @@ namespace RoadTripMovie::FfmpegProcessor
         using Packet = std::unique_ptr<AVPacket, PacketDeleter>;
         using Frame = std::unique_ptr<AVFrame, FrameDeleter>;
         using FilterGraph = std::unique_ptr<AVFilterGraph, FilterGraphDeleter>;
+
+        std::mutex audioValidationMutex;
+        std::mutex audioLogMutex;
+        std::string* capturedAudioErrors{};
+
+        void CaptureAudioLog(void* context, int level, char const* format, va_list arguments)
+        {
+            if (level <= AV_LOG_ERROR)
+            {
+                char message[2048]{};
+                va_list copy;
+                va_copy(copy, arguments);
+                auto length = std::vsnprintf(message, sizeof(message), format, copy);
+                va_end(copy);
+                if (length > 0)
+                {
+                    std::scoped_lock lock(audioLogMutex);
+                    if (capturedAudioErrors)
+                    {
+                        constexpr std::size_t maxCapturedAudioErrors = 4096;
+                        auto remaining = maxCapturedAudioErrors - capturedAudioErrors->size();
+                        capturedAudioErrors->append(
+                            message,
+                            std::min({ static_cast<std::size_t>(length),
+                                sizeof(message) - 1, remaining }));
+                    }
+                }
+            }
+            av_log_default_callback(context, level, format, arguments);
+        }
+
+        class AudioLogCapture
+        {
+        public:
+            AudioLogCapture() : validationLock_(audioValidationMutex)
+            {
+                std::scoped_lock lock(audioLogMutex);
+                capturedAudioErrors = &errors_;
+                av_log_set_callback(CaptureAudioLog);
+            }
+
+            ~AudioLogCapture()
+            {
+                av_log_set_callback(av_log_default_callback);
+                std::scoped_lock lock(audioLogMutex);
+                capturedAudioErrors = nullptr;
+            }
+
+            AudioLogCapture(AudioLogCapture const&) = delete;
+            AudioLogCapture& operator=(AudioLogCapture const&) = delete;
+
+            std::string Errors()
+            {
+                std::scoped_lock lock(audioLogMutex);
+                return errors_;
+            }
+
+        private:
+            std::unique_lock<std::mutex> validationLock_;
+            std::string errors_;
+        };
+
         [[noreturn]] void ThrowAvError(int code, std::string const& action)
         {
             char text[AV_ERROR_MAX_STRING_SIZE]{};
@@ -125,7 +192,13 @@ namespace RoadTripMovie::FfmpegProcessor
             return result;
         }
 
-        std::optional<int> ReadJpegExifOrientation(Path const& path)
+        struct ExifMetadata
+        {
+            std::optional<int> orientation;
+            std::optional<GeoLocation> location;
+        };
+
+        std::optional<ExifMetadata> ReadJpegExif(Path const& path)
         {
             std::ifstream input(path, std::ios::binary);
             if (!input)
@@ -225,28 +298,116 @@ namespace RoadTripMovie::FfmpegProcessor
                 if (!entryCount)
                     continue;
                 auto entriesOffset = static_cast<std::size_t>(*directoryOffset) + 2;
+                ExifMetadata metadata;
+                std::optional<uint32_t> gpsDirectoryOffset;
                 for (uint16_t index = 0; index < *entryCount; ++index)
                 {
                     auto entryOffset = entriesOffset + static_cast<std::size_t>(index) * 12;
                     auto tag = read16(entryOffset);
                     if (!tag)
                         break;
-                    if (*tag != 0x0112)
-                        continue;
+                    if (*tag == 0x0112)
+                    {
+                        auto type = read16(entryOffset + 2);
+                        auto count = read32(entryOffset + 4);
+                        if (type && *type == 3 && count && *count == 1)
+                        {
+                            auto orientation = read16(entryOffset + 8);
+                            if (orientation && *orientation >= 1 && *orientation <= 8)
+                                metadata.orientation = *orientation;
+                        }
+                    }
+                    else if (*tag == 0x8825)
+                    {
+                        auto offset = read32(entryOffset + 8);
+                        if (offset)
+                            gpsDirectoryOffset = *offset;
+                    }
+                }
+                if (!gpsDirectoryOffset)
+                    return metadata;
+
+                auto gpsEntryCount = read16(*gpsDirectoryOffset);
+                if (!gpsEntryCount)
+                    return metadata;
+                std::optional<char> latitudeReference;
+                std::optional<char> longitudeReference;
+                std::optional<uint32_t> latitudeOffset;
+                std::optional<uint32_t> longitudeOffset;
+                std::optional<uint32_t> latitudeCount;
+                std::optional<uint32_t> longitudeCount;
+                auto gpsEntriesOffset = static_cast<std::size_t>(*gpsDirectoryOffset) + 2;
+                for (uint16_t index = 0; index < *gpsEntryCount; ++index)
+                {
+                    auto entryOffset = gpsEntriesOffset + static_cast<std::size_t>(index) * 12;
+                    auto tag = read16(entryOffset);
                     auto type = read16(entryOffset + 2);
                     auto count = read32(entryOffset + 4);
-                    if (!type || *type != 3 || !count || *count == 0)
+                    if (!tag || !type || !count)
                         break;
-                    auto valueOffset = *count == 1
-                        ? std::optional<uint32_t>(static_cast<uint32_t>(entryOffset + 8))
-                        : read32(entryOffset + 8);
-                    if (!valueOffset)
-                        break;
-                    auto orientation = read16(*valueOffset);
-                    if (orientation && *orientation >= 1 && *orientation <= 8)
-                        return *orientation;
-                    break;
+
+                    if ((*tag == 1 || *tag == 3) && *type == 2 && *count >= 1)
+                    {
+                        auto valueOffset = entryOffset + 8;
+                        if (valueOffset < tiff.size())
+                        {
+                            auto reference = static_cast<char>(tiff[valueOffset]);
+                            if (*tag == 1)
+                                latitudeReference = reference;
+                            else
+                                longitudeReference = reference;
+                        }
+                    }
+                    else if ((*tag == 2 || *tag == 4) && *type == 5 && *count >= 3)
+                    {
+                        auto offset = read32(entryOffset + 8);
+                        if (*tag == 2)
+                        {
+                            latitudeOffset = offset;
+                            latitudeCount = *count;
+                        }
+                        else
+                        {
+                            longitudeOffset = offset;
+                            longitudeCount = *count;
+                        }
+                    }
                 }
+
+                auto readCoordinate = [&](uint32_t offset, uint32_t count)
+                    -> std::optional<double>
+                {
+                    if (count < 3)
+                        return std::nullopt;
+                    double components[3]{};
+                    for (std::size_t component = 0; component < 3; ++component)
+                    {
+                        auto numerator = read32(static_cast<std::size_t>(offset) + component * 8);
+                        auto denominator = read32(static_cast<std::size_t>(offset) + component * 8 + 4);
+                        if (!numerator || !denominator || *denominator == 0)
+                            return std::nullopt;
+                        components[component] =
+                            static_cast<double>(*numerator) / *denominator;
+                    }
+                    return components[0] + components[1] / 60.0 + components[2] / 3600.0;
+                };
+                if (latitudeReference && longitudeReference &&
+                    latitudeOffset && longitudeOffset &&
+                    latitudeCount && longitudeCount)
+                {
+                    auto latitude = readCoordinate(*latitudeOffset, *latitudeCount);
+                    auto longitude = readCoordinate(*longitudeOffset, *longitudeCount);
+                    if (latitude && longitude)
+                    {
+                        if (*latitudeReference == 'S')
+                            *latitude = -*latitude;
+                        if (*longitudeReference == 'W')
+                            *longitude = -*longitude;
+                        if (std::abs(*latitude) <= 90.0 && std::abs(*longitude) <= 180.0)
+                            metadata.location = GeoLocation{ *latitude, *longitude };
+                    }
+                }
+                return metadata;
             }
             return std::nullopt;
         }
@@ -258,7 +419,10 @@ namespace RoadTripMovie::FfmpegProcessor
             std::transform(extension.begin(), extension.end(), extension.begin(),
                 [](wchar_t character) { return static_cast<wchar_t>(std::towlower(character)); });
             if (photo && (extension == L".jpg" || extension == L".jpeg"))
-                exifOrientation = ReadJpegExifOrientation(path);
+            {
+                if (auto exif = ReadJpegExif(path))
+                    exifOrientation = exif->orientation;
+            }
 
             auto input = OpenInput(path);
             for (unsigned int index = 0; index < input->nb_streams; ++index)
@@ -461,6 +625,14 @@ namespace RoadTripMovie::FfmpegProcessor
             return source;
         }
 
+        void RequireFilter(char const* name)
+        {
+            if (!avfilter_get_by_name(name))
+                throw std::runtime_error(
+                    std::string("The loaded FFmpeg build does not provide the required '") +
+                    name + "' filter.");
+        }
+
         AVFilterInOut* NewEndpoint(
             char const* name,
             AVFilterContext* context,
@@ -497,6 +669,10 @@ namespace RoadTripMovie::FfmpegProcessor
                 graph, description.c_str(), &sinkEndpoints, &sourceEndpoints, nullptr);
             avfilter_inout_free(&sourceEndpoints);
             avfilter_inout_free(&sinkEndpoints);
+            if (result == AVERROR_FILTER_NOT_FOUND)
+                throw std::runtime_error(
+                    "Could not connect FFmpeg filters: a filter is not registered. "
+                    "Graph: " + description);
             Check(result, "Could not connect FFmpeg filters");
             Check(avfilter_graph_config(graph, nullptr),
                 "Could not configure FFmpeg filters");
@@ -532,7 +708,7 @@ namespace RoadTripMovie::FfmpegProcessor
                 throw std::bad_alloc();
             for (;;)
             {
-                auto result = avcodec_receive_packet(encoder, packet.get());
+                result = avcodec_receive_packet(encoder, packet.get());
                 if (result == AVERROR(EAGAIN) || result == AVERROR_EOF)
                     break;
                 Check(result, "Could not receive an encoded packet");
@@ -593,9 +769,10 @@ namespace RoadTripMovie::FfmpegProcessor
             PipelineSettings const& settings,
             double duration,
             bool photo,
-            std::string const& orientation)
+            std::string const& orientation,
+            bool hasMap)
         {
-            return std::string("[video]") +
+            auto description = std::string("[video]") +
                 (photo ? "loop=loop=-1:size=1:start=0," : "") +
                 orientation +
                 "fps=fps=" + std::to_string(settings.fps) +
@@ -603,8 +780,19 @@ namespace RoadTripMovie::FfmpegProcessor
                 std::to_string(settings.height) + ":force_original_aspect_ratio=decrease" +
                 ",pad=" + std::to_string(settings.width) + ":" +
                 std::to_string(settings.height) + ":(ow-iw)/2:(oh-ih)/2" +
-                ",setsar=1,format=yuv420p,trim=duration=" + std::to_string(duration) +
+                ",setsar=1,format=yuv420p[base_video]";
+            if (hasMap)
+            {
+                description += ";[map]loop=loop=-1:size=1:start=0,scale=" +
+                    std::to_string(settings.mapWidth) + ":" +
+                    std::to_string(settings.mapHeight) +
+                    "[map_image];[base_video][map_image]overlay=x=W-w-12:y=12:"
+                    "shortest=1[composited]";
+            }
+            description += hasMap ? ";[composited]trim=duration=" : ";[base_video]trim=duration=";
+            description += std::to_string(duration) +
                 ",setpts=PTS-STARTPTS[video_out]";
+            return description;
         }
 
         std::string SegmentAudioFilterDescription(
@@ -661,6 +849,145 @@ namespace RoadTripMovie::FfmpegProcessor
             if (cancellation.stop_requested())
                 throw std::runtime_error("Movie creation was cancelled.");
         }
+
+        std::optional<GeoLocation> ParseIso6709(std::string const& raw)
+        {
+            auto first = raw.find_first_of("+-");
+            if (first == std::string::npos)
+                return std::nullopt;
+            char* latitudeEnd{};
+            auto latitude = std::strtod(raw.c_str() + first, &latitudeEnd);
+            if (latitudeEnd == raw.c_str() + first ||
+                (*latitudeEnd != '+' && *latitudeEnd != '-'))
+                return std::nullopt;
+            char* longitudeEnd{};
+            auto longitude = std::strtod(latitudeEnd, &longitudeEnd);
+            if (longitudeEnd == latitudeEnd || !std::isfinite(latitude) ||
+                !std::isfinite(longitude) || std::abs(latitude) > 90.0 ||
+                std::abs(longitude) > 180.0)
+                return std::nullopt;
+            return GeoLocation{ latitude, longitude };
+        }
+
+        std::optional<GeoLocation> LocationFromDictionary(AVDictionary* metadata)
+        {
+            for (auto key : {
+                     "com.apple.quicktime.location.ISO6709",
+                     "location",
+                     "location-eng" })
+            {
+                auto value = av_dict_get(metadata, key, nullptr, 0);
+                if (!value || !value->value)
+                    continue;
+                if (auto location = ParseIso6709(value->value))
+                    return location;
+            }
+            return std::nullopt;
+        }
+    }
+
+    std::optional<GeoLocation> ReadLocation(Path const& path, bool photo)
+    {
+        if (photo)
+        {
+            auto extension = path.extension().wstring();
+            std::transform(extension.begin(), extension.end(), extension.begin(),
+                [](wchar_t character) { return static_cast<wchar_t>(std::towlower(character)); });
+            if (extension == L".jpg" || extension == L".jpeg")
+            {
+                if (auto exif = ReadJpegExif(path); exif && exif->location)
+                    return exif->location;
+            }
+        }
+
+        try
+        {
+            auto input = OpenInput(path);
+            if (auto location = LocationFromDictionary(input->metadata))
+                return location;
+            for (unsigned int index = 0; index < input->nb_streams; ++index)
+            {
+                if (auto location = LocationFromDictionary(input->streams[index]->metadata))
+                    return location;
+            }
+        }
+        catch (std::exception const&)
+        {
+            return std::nullopt;
+        }
+        return std::nullopt;
+    }
+
+    void ValidateAudio(Path const& path)
+    {
+        AudioLogCapture logCapture;
+        auto file = Utf8(path);
+        auto input = OpenInput(path);
+        auto audioIndex = FindStream(input.get(), AVMEDIA_TYPE_AUDIO);
+        if (audioIndex < 0)
+            throw std::runtime_error("The selected music file has no audio stream: " + file);
+
+        auto stream = input->streams[audioIndex];
+        auto decoder = avcodec_find_decoder(stream->codecpar->codec_id);
+        if (!decoder)
+            throw std::runtime_error("FFmpeg has no decoder for the selected music file: " + file);
+
+        Codec context(avcodec_alloc_context3(decoder));
+        if (!context)
+            throw std::bad_alloc();
+        Check(avcodec_parameters_to_context(context.get(), stream->codecpar),
+            "Could not read the music audio format");
+        context->err_recognition = AV_EF_EXPLODE;
+        Check(avcodec_open2(context.get(), decoder, nullptr),
+            "Could not open the music audio decoder");
+
+        Packet packet(av_packet_alloc());
+        Frame frame(av_frame_alloc());
+        if (!packet || !frame)
+            throw std::bad_alloc();
+        auto decodeAvailableFrames = [&]()
+        {
+            for (;;)
+            {
+                auto result = avcodec_receive_frame(context.get(), frame.get());
+                if (result == AVERROR(EAGAIN) || result == AVERROR_EOF)
+                    return result;
+                if (result < 0)
+                    ThrowAvError(result, "The selected music file contains invalid audio data: " + file);
+                if ((frame->flags & AV_FRAME_FLAG_CORRUPT) != 0 ||
+                    frame->decode_error_flags != 0)
+                    throw std::runtime_error(
+                        "FFmpeg detected corrupt audio in the selected music file: " + file);
+                av_frame_unref(frame.get());
+            }
+        };
+
+        for (;;)
+        {
+            auto result = av_read_frame(input.get(), packet.get());
+            if (result == AVERROR_EOF)
+                break;
+            Check(result, "Could not read the selected music file: " + file);
+            if (packet->stream_index == audioIndex)
+            {
+                result = avcodec_send_packet(context.get(), packet.get());
+                if (result < 0)
+                    ThrowAvError(result, "The selected music file contains invalid audio data: " + file);
+                decodeAvailableFrames();
+            }
+            av_packet_unref(packet.get());
+        }
+
+        Check(avcodec_send_packet(context.get(), nullptr),
+            "Could not finish decoding the selected music file: " + file);
+        auto result = decodeAvailableFrames();
+        if (result != AVERROR_EOF)
+            throw std::runtime_error("FFmpeg could not finish decoding the selected music file: " + file);
+        auto errors = logCapture.Errors();
+        if (!errors.empty())
+            throw std::runtime_error(
+                "FFmpeg reported errors while decoding the selected music file: " +
+                file + "\n" + errors);
     }
 
     void RenderSegment(
@@ -670,6 +997,11 @@ namespace RoadTripMovie::FfmpegProcessor
         std::stop_token cancellation)
     {
         CheckCancelled(cancellation);
+        std::optional<Path> mapPath;
+        if (settings.showMap && item.location)
+            mapPath = MapThumbnail::Render(
+                *item.location, settings.mapCacheDirectory,
+                settings.mapWidth, settings.mapHeight, settings.mapZoom);
         auto graph = CreateGraph();
         auto orientation = OrientationFilter(item.file, item.photo);
         auto videoSource = CreateMediaSource(
@@ -680,6 +1012,29 @@ namespace RoadTripMovie::FfmpegProcessor
         if (item.hasAudio)
             audioSource = CreateMediaSource(
                 graph.get(), "amovie", "audio_source", item.file);
+        AVFilterContext* mapSource{};
+        if (mapPath)
+            mapSource = CreateMediaSource(graph.get(), "movie", "map_source", *mapPath);
+
+        for (auto filter : {
+             "fps", "scale", "pad", "setsar", "format", "trim", "setpts",
+             "atrim", "asetpts", "aformat", "asetnsamples" })
+        RequireFilter(filter);
+        if (item.photo || mapSource)
+        RequireFilter("loop");
+        if (mapSource)
+        RequireFilter("overlay");
+        if (item.hasAudio)
+        {
+        RequireFilter("volume");
+        RequireFilter("amix");
+        }
+        if (orientation.find("transpose") != std::string::npos)
+        RequireFilter("transpose");
+        if (orientation.find("hflip") != std::string::npos)
+        RequireFilter("hflip");
+        if (orientation.find("vflip") != std::string::npos)
+        RequireFilter("vflip");
 
         auto videoSink = CreateSink(graph.get(), "buffersink", "video_sink");
         auto audioSink = CreateSink(graph.get(), "abuffersink", "audio_sink");
@@ -688,9 +1043,12 @@ namespace RoadTripMovie::FfmpegProcessor
         };
         if (audioSource)
             sources.emplace_back("source", audioSource);
+        if (mapSource)
+            sources.emplace_back("map", mapSource);
         ParseFilterGraph(
             graph.get(),
-            VideoFilterDescription(settings, item.duration, item.photo, orientation) + ";" +
+            VideoFilterDescription(
+                settings, item.duration, item.photo, orientation, mapSource != nullptr) + ";" +
                 SegmentAudioFilterDescription(item.hasAudio, settings, item.duration),
             sources,
             { { "video_out", videoSink }, { "audio_out", audioSink } });
@@ -779,7 +1137,7 @@ namespace RoadTripMovie::FfmpegProcessor
                 if (end != AV_NOPTS_VALUE)
                     streamEnds[streamIndex] =
                         std::max(streamEnds[streamIndex], end + packet->duration);
-                Check(av_write_frame(output.get(), packet.get()),
+                Check(av_interleaved_write_frame(output.get(), packet.get()),
                     "Could not concatenate a media packet");
                 av_packet_unref(packet.get());
             }

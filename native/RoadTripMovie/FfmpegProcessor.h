@@ -12,7 +12,14 @@ namespace RoadTripMovie::FfmpegProcessor
         bool photo{};
         double duration{};
         bool hasAudio{};
+        std::optional<GeoLocation> location;
     };
+
+    std::optional<GeoLocation> ReadLocation(
+        std::filesystem::path const& path,
+        bool photo);
+
+    void ValidateAudio(std::filesystem::path const& path);
 
     void RenderSegment(
         MediaItem const& item,

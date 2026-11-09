@@ -7,7 +7,13 @@
 #include <algorithm>
 #include <thread>
 
+#include <winrt/Microsoft.UI.h>
+#include <winrt/Microsoft.UI.Windowing.h>
+#include <winrt/Microsoft.UI.Interop.h>
+
 using namespace winrt;
+using namespace winrt::Microsoft::UI;
+using namespace Microsoft::UI::Windowing;
 using namespace Microsoft::UI::Xaml;
 using namespace Microsoft::UI::Xaml::Controls;
 using namespace Windows::Storage;
@@ -41,10 +47,12 @@ namespace RoadTripMovie
             horizontalPanel.Orientation(Orientation::Horizontal);
             horizontalPanel.VerticalAlignment(VerticalAlignment::Center);
 			TextBlock label;
-			label.Width(240);
+            label.Width(200);
 			label.Text(header);
-			horizontalPanel.Children().Append(label);
+            label.TextWrapping(TextWrapping::Wrap);
+            horizontalPanel.Children().Append(label);
             NumberBox box;
+            box.Width(160);
             box.Value(value);
             box.Minimum(minimum);
             box.Maximum(maximum);
@@ -63,7 +71,7 @@ namespace RoadTripMovie
 			horizontalPanel.Orientation(Orientation::Horizontal);
 			horizontalPanel.VerticalAlignment(VerticalAlignment::Center);
 			TextBlock label;
-			label.Width(240);
+			label.Width(200);
 			label.Text(labelText);
 			horizontalPanel.Children().Append(label);
 			TextBox box;
@@ -78,12 +86,21 @@ namespace RoadTripMovie
     MainWindow::MainWindow()
     {
         window = Window();
+        // 2. Cast the presenter to an OverlappedPresenter
+        if (auto overlappedPresenter{ window.AppWindow().Presenter().try_as<OverlappedPresenter>() })
+        {
+            // 3. Disable the maximize and resize capabilities
+            overlappedPresenter.IsMaximizable(false);
+            overlappedPresenter.IsResizable(false); // Dialogs shouldn't be resizable
+        }
         window.Title(L"RoadTripMovie");
 
         StackPanel form;
         form.Spacing(12);
-        form.MaxWidth(720);
-        form.HorizontalAlignment(HorizontalAlignment::Left);
+        //form.MaxWidth(420);
+        form.HorizontalAlignment(HorizontalAlignment::Stretch);
+        form.VerticalAlignment(VerticalAlignment::Stretch);
+//        form.HorizontalAlignment(HorizontalAlignment::Left);
 
         TextBlock title;
         title.Text(L"Create a road-trip movie");
@@ -113,16 +130,18 @@ namespace RoadTripMovie
 
         StackPanel actions;
         actions.Orientation(Orientation::Horizontal);
+        actions.HorizontalAlignment(HorizontalAlignment::Right);
         actions.Spacing(8);
-        startButton = Button();
-        startButton.Content(box_value(L"Create movie"));
-        startButton.Click([this](auto&&, auto&&) { Start(); });
-        actions.Children().Append(startButton);
         cancelButton = Button();
         cancelButton.Content(box_value(L"Cancel"));
         cancelButton.IsEnabled(false);
         cancelButton.Click([this](auto&&, auto&&) { Cancel(); });
         actions.Children().Append(cancelButton);
+        startButton = Button();
+        startButton.Content(box_value(L"Create movie"));
+        startButton.Click([this](auto&&, auto&&) { Start(); });
+        actions.Children().Append(startButton);
+
         progressIndicator = ProgressRing();
         progressIndicator.Width(28);
         progressIndicator.Height(28);
@@ -141,6 +160,7 @@ namespace RoadTripMovie
         ScrollViewer scroll;
         scroll.Content(content);
         window.Content(scroll);
+        window.AppWindow().Resize(Windows::Graphics::SizeInt32{ 550, 700 });
     }
 
     MainWindow::~MainWindow()
