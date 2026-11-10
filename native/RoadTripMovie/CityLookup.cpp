@@ -8,11 +8,14 @@
 #include <cstdlib>
 #include <fstream>
 #include <limits>
+#include <ranges>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <system_error>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 namespace RoadTripMovie::CityLookup
 {
@@ -48,48 +51,14 @@ namespace RoadTripMovie::CityLookup
 
         std::vector<std::string> ParseCsvRow(std::string_view line)
         {
+            std::string ls(line);
+            std::remove_if(ls.begin(), ls.end(),
+                [](unsigned char c) { return c == '\r' || c == '\n' || c == '"'; });
             std::vector<std::string> fields;
-            std::string field;
-            bool quoted{};
-            for (std::size_t index = 0; index < line.size(); ++index)
-            {
-                auto character = line[index];
-                if (quoted)
-                {
-                    if (character == '"')
-                    {
-                        if (index + 1 < line.size() && line[index + 1] == '"')
-                        {
-                            field.push_back('"');
-                            ++index;
-                        }
-                        else
-                        {
-                            quoted = false;
-                        }
-                    }
-                    else
-                    {
-                        field.push_back(character);
-                    }
-                }
-                else if (character == ',' && fields.size() < 2)
-                {
-                    fields.push_back(std::move(field));
-                    field.clear();
-                }
-                else if (character == '"' && field.empty())
-                {
-                    quoted = true;
-                }
-                else
-                {
-                    field.push_back(character);
-                }
+
+            for (auto&& field : std::views::split(ls, ',')) {
+                fields.push_back(std::move(std::string(field.data())));
             }
-            if (quoted)
-                throw std::runtime_error("The city data CSV contains an unterminated quoted field.");
-            fields.push_back(std::move(field));
             if (fields.size() != 3)
                 throw std::runtime_error("The city data CSV must have three columns.");
             return fields;
@@ -99,7 +68,7 @@ namespace RoadTripMovie::CityLookup
         {
             char* end{};
             auto result = std::strtod(value.c_str(), &end);
-            if (end == value.c_str() || *end != '\0' || !std::isfinite(result) ||
+            if (end == value.c_str() || !std::isfinite(result) ||
                 result < minimum || result > maximum)
                 throw std::runtime_error("The city data CSV contains an invalid coordinate.");
             return result;
@@ -146,12 +115,20 @@ namespace RoadTripMovie::CityLookup
                     line.pop_back();
                 if (line.empty())
                     continue;
-                auto fields = ParseCsvRow(line);
-                auto latitude = ParseCoordinate(fields[1], -90.0, 90.0);
-                auto longitude = ParseCoordinate(fields[2], -180.0, 180.0);
-                if (fields[0].empty())
-                    throw std::runtime_error("The city data CSV contains an unnamed city.");
-                cities.push_back({ std::move(fields[0]), ToUnitSphere(latitude, longitude) });
+				try
+				{
+					auto fields = ParseCsvRow(line);
+					auto latitude = ParseCoordinate(fields[1], -90.0, 90.0);
+					auto longitude = ParseCoordinate(fields[2], -180.0, 180.0);
+					if (fields[0].empty())
+						throw std::runtime_error("The city data CSV contains an unnamed city.");
+					cities.push_back({ std::move(fields[0]), ToUnitSphere(latitude, longitude) });
+				}
+				catch (std::exception const& error)
+				{
+					// Ignore invalid rows, but log them to the console for debugging.
+                    std::wcerr << L"Invalid row in city data file: " << line.data() << std::endl;
+				}
             }
             if (!input.eof())
                 throw std::runtime_error("Could not read the packaged city data file.");

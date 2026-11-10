@@ -1,4 +1,5 @@
 __pycache__/
+.github
 *.pyc
 .venv/
 .venv_check/
