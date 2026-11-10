@@ -28,6 +28,7 @@ namespace RoadTripMovie
         winrt::Microsoft::UI::Xaml::Controls::NumberBox musicVolumeBox{ nullptr };
         winrt::Microsoft::UI::Xaml::Controls::Button startButton{ nullptr };
         winrt::Microsoft::UI::Xaml::Controls::Button cancelButton{ nullptr };
+        winrt::Microsoft::UI::Xaml::Controls::CheckBox openVideoWhenDoneCheckBox{ nullptr };
         winrt::Microsoft::UI::Xaml::Controls::ProgressRing progressIndicator{ nullptr };
         winrt::Microsoft::UI::Xaml::Controls::TextBlock statusText{ nullptr };
         ::RoadTripMovie::Pipeline::CancellationSource cancellation;

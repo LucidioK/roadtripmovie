@@ -75,7 +75,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>windowsapp.lib;gdiplus.lib;winhttp.lib;$(WindowsAppSDKPackageDir)\lib\win10-x64\Microsoft.WindowsAppRuntime.Bootstrap.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>windowsapp.lib;shell32.lib;gdiplus.lib;winhttp.lib;$(WindowsAppSDKPackageDir)\lib\win10-x64\Microsoft.WindowsAppRuntime.Bootstrap.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

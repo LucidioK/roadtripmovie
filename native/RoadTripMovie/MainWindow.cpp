@@ -2,9 +2,11 @@
 #include "MainWindow.h"
 
 #include <shobjidl_core.h>
+#include <shellapi.h>
 #include <microsoft.ui.xaml.window.h>
 
 #include <algorithm>
+#include <system_error>
 #include <thread>
 
 #include <winrt/Microsoft.UI.h>
@@ -173,6 +175,12 @@ namespace RoadTripMovie
 
     void MainWindow::AddActionButtons(winrt::Microsoft::UI::Xaml::Controls::StackPanel& form)
     {
+        openVideoWhenDoneCheckBox = CheckBox();
+        openVideoWhenDoneCheckBox.Content(box_value(L"Open video when done"));
+        openVideoWhenDoneCheckBox.IsChecked(
+            box_value(true).as<winrt::Windows::Foundation::IReference<bool>>());
+        form.Children().Append(openVideoWhenDoneCheckBox);
+
         StackPanel actions;
         actions.Orientation(Orientation::Horizontal);
         actions.HorizontalAlignment(HorizontalAlignment::Right);
@@ -298,7 +306,10 @@ namespace RoadTripMovie
             auto token = cancellation.get_token();
             auto dispatcher = window.DispatcherQueue();
             std::weak_ptr<MainWindow> weak = shared_from_this();
-            worker = std::jthread([settings = std::move(settings), token, dispatcher, weak](std::stop_token)
+            auto openVideoWhenDone = openVideoWhenDoneCheckBox.IsChecked().Value();
+            worker = std::jthread(
+                [settings = std::move(settings), token, dispatcher, weak,
+                    openVideoWhenDone](std::stop_token)
             {
                 try
                 {
@@ -310,6 +321,20 @@ namespace RoadTripMovie
                                 window->SetStatus(message);
                         });
                     });
+                    if (openVideoWhenDone)
+                    {
+                        SHELLEXECUTEINFOW launch{};
+                        launch.cbSize = sizeof(launch);
+                        launch.fMask = SEE_MASK_FLAG_NO_UI;
+                        launch.lpVerb = L"open";
+                        auto outputPath = settings.outputPath.wstring();
+                        launch.lpFile = outputPath.c_str();
+                        launch.nShow = SW_SHOWNORMAL;
+                        if (!ShellExecuteExW(&launch))
+                            throw std::system_error(
+                                static_cast<int>(GetLastError()), std::system_category(),
+                                "The movie was created, but Windows could not open it.");
+                    }
                     dispatcher.TryEnqueue([weak]
                     {
                         if (auto window = weak.lock())
