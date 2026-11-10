@@ -1,5 +1,33 @@
 # RoadTripMovie for Windows
 
+## How to use it
+
+1. Prepare your material to be used by **RoadTripMovie**:
+   1. Add all your pictures and movies that you want to include into one folder.
+   2. At least some of the media items (pictures and movies) must have GPS coordinates. Most cell phones allow you to include GPS coordinates to the pictures and movies.
+   3. The media items must have the date when they were taken.
+   4. Place an MP3/WMA/WAV file in a known location to be used as background.
+   5. Make sure you have internet access. 
+2. Start **RoadTripMovie**.
+3. On the line _Media Folder_, click on _Browse_ and select the folder where you placed your media.
+4. On the line _Background music_, click on _Browse_ and select the MP3/WMA/WAV file to be used as background.
+5. On the line _Output video_, click on _Save as_ and enter the location and name of the movie file to be generated.
+6. Adjust the other parameters, though most if not all can be used as is:
+   1. _Photo duration (seconds)_: in case you want photos to be displayed for a different amount of time other than five seconds.
+   2. _Output width_: The width of the generated movie, default is 1920.
+   3. _Output height_: Height of the generated movie, default is 1080. 
+   4. _Frames per second_: Higher frames per second are considered better quality, but use significantly more resources.
+   5. _Video audio volume_: For movie media, set the volume for these items, 0 is no volume, 1 is full volume.
+   6. _Music volume_: Volume for the background music.
+   7. _Open video when done_: it selected, it will open the video after it was generated.
+7. Click on **Create Movie**. 
+   1. It will take around two seconds per media item, depending on your computer.
+   2. If you selected _Open video when done_, the video will be displayed.
+---
+
+
+## Technical Description
+
 This is the C++/WinRT WinUI 3 desktop application and MSIX packaging project. Open
 `RoadTripMovie.sln` in Visual Studio 2022 with the **Desktop development with C++**,
 **Windows App SDK**, and **MSIX Packaging** components installed.
