@@ -1,5 +1,9 @@
 # RoadTripMovie for Windows
 
+## License
+
+MIT License: https://github.com/LucidioK/roadtripmovie/blob/master/LICENSE
+
 ## How to use it
 
 1. Prepare your material to be used by **RoadTripMovie**:
@@ -23,6 +27,7 @@
 7. Click on **Create Movie**. 
    1. It will take around two seconds per media item, depending on your computer.
    2. If you selected _Open video when done_, the video will be displayed.
+
 ---
 
 
