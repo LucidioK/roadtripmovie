@@ -43,6 +43,9 @@
     <Content Include="..\RoadTripMovie\Assets\*.png">
       <Link>Assets\%(Filename)%(Extension)</Link>
     </Content>
+    <Content Include="..\RoadTripMovie\Assets\RoadTripMovie.ico">
+      <Link>RoadTripMovie\RoadTripMovie.ico</Link>
+    </Content>
     <Content Include="..\vcpkg_installed\x64-windows\bin\avcodec-*.dll;..\vcpkg_installed\x64-windows\bin\avfilter-*.dll;..\vcpkg_installed\x64-windows\bin\avformat-*.dll;..\vcpkg_installed\x64-windows\bin\avutil-*.dll;..\vcpkg_installed\x64-windows\bin\swresample-*.dll;..\vcpkg_installed\x64-windows\bin\swscale-*.dll">
       <Link>RoadTripMovie\%(Filename)%(Extension)</Link>
     </Content>

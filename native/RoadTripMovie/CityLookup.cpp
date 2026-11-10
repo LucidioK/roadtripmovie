@@ -24,7 +24,7 @@ namespace RoadTripMovie::CityLookup
         struct City
         {
             std::string name;
-            std::array<double, 3> point;
+            std::array<double, 3> point  {0.0, 0.0, 0.0};
         };
 
         struct Node
@@ -52,8 +52,7 @@ namespace RoadTripMovie::CityLookup
         std::vector<std::string> ParseCsvRow(std::string_view line)
         {
             std::string ls(line);
-            std::remove_if(ls.begin(), ls.end(),
-                [](unsigned char c) { return c == '\r' || c == '\n' || c == '"'; });
+			std::erase_if(ls, [](unsigned char c) { return c == '\r' || c == '\n' || c == '"'; });
             std::vector<std::string> fields;
 
             for (auto&& field : std::views::split(ls, ',')) {

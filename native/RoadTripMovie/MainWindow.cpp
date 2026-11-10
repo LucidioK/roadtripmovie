@@ -23,6 +23,19 @@ namespace RoadTripMovie
 {
     namespace
     {
+        std::filesystem::path GetExecutablePath()
+        {
+            std::wstring executable(32768, L'\0');
+            auto length = GetModuleFileNameW(
+                nullptr, executable.data(), static_cast<DWORD>(executable.size()));
+            if (length == 0 || length >= executable.size())
+                throw std::system_error(
+                    static_cast<int>(GetLastError()), std::system_category(),
+                    "Could not locate the installed application.");
+            executable.resize(length);
+            return executable;
+        }
+
         void AddTextField(StackPanel const& panel, hstring const& header, TextBox const& box)
         {
             box.Header(box_value(header));
@@ -86,6 +99,8 @@ namespace RoadTripMovie
     MainWindow::MainWindow()
     {
         window = Window();
+        window.AppWindow().SetIcon(
+            (GetExecutablePath().parent_path() / L"RoadTripMovie.ico").wstring());
         if (auto overlappedPresenter{ window.AppWindow().Presenter().try_as<OverlappedPresenter>() })
         {
             // Disable the maximize and resize capabilities
@@ -255,15 +270,7 @@ namespace RoadTripMovie
         settings.inputFolder = inputFolderBox.Text().c_str();
         settings.musicPath = musicFileBox.Text().c_str();
         settings.outputPath = outputFileBox.Text().c_str();
-        std::wstring executable(32768, L'\0');
-        auto executableLength = GetModuleFileNameW(
-            nullptr, executable.data(), static_cast<DWORD>(executable.size()));
-        if (executableLength == 0 || executableLength >= executable.size())
-            throw std::system_error(
-                static_cast<int>(GetLastError()), std::system_category(),
-                "Could not locate the installed application.");
-        executable.resize(executableLength);
-        settings.ffmpegDirectory = std::filesystem::path(executable).parent_path();
+        settings.ffmpegDirectory = GetExecutablePath().parent_path();
         settings.photoDuration = photoDurationBox.Value();
         auto videoLimit = videoLimitBox.Value();
         if (videoLimit > 0)
