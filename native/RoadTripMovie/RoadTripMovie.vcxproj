@@ -56,8 +56,7 @@
     <IntDir>$(SolutionDir)obj\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
     <XamlGeneratedOutputPath>$(IntDir)</XamlGeneratedOutputPath>
   </PropertyGroup>
-  <Import Project="$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.props"
-          Condition="Exists('$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.props')" />
+  <Import Project="$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.props" Condition="Exists('$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.props')" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>$(WindowsSdkDir)Include\$(WindowsTargetPlatformVersion)\cppwinrt;$(ProjectDir)Generated Files\winrt;$(XamlGeneratedOutputPath);$(IncludePath)</IncludePath>
   </PropertyGroup>
@@ -115,20 +114,18 @@
       <Link>Microsoft.WindowsAppRuntime.Bootstrap.dll</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-    <None Include="Package.appxmanifest" />
+    <None Include="Package.appxmanifest">
+      <SubType>Designer</SubType>
+    </None>
     <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <Import Project="$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.targets"
-          Condition="Exists('$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.targets')" />
+  <Import Project="$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.targets" Condition="Exists('$(VcpkgRoot)\scripts\buildsystems\msbuild\vcpkg.targets')" />
   <Import Project="..\packages\Microsoft.Web.WebView2.1.0.2651.64\build\native\Microsoft.Web.WebView2.targets" Condition="Exists('..\packages\Microsoft.Web.WebView2.1.0.2651.64\build\native\Microsoft.Web.WebView2.targets')" />
   <Import Project="..\packages\Microsoft.Windows.SDK.BuildTools.10.0.22621.756\buildTransitive\Microsoft.Windows.SDK.BuildTools.targets" Condition="Exists('..\packages\Microsoft.Windows.SDK.BuildTools.10.0.22621.756\buildTransitive\Microsoft.Windows.SDK.BuildTools.targets')" />
   <Import Project="..\packages\Microsoft.WindowsAppSDK.1.6.250205002\build\native\Microsoft.WindowsAppSDK.targets" Condition="Exists('..\packages\Microsoft.WindowsAppSDK.1.6.250205002\build\native\Microsoft.WindowsAppSDK.targets')" />
-  <Target Name="CompileWinUIXaml" BeforeTargets="ClCompile"
-          DependsOnTargets="ResolveAssemblyReferences;ResolveKeySource;MarkupCompilePass1;MarkupCompilePass2" />
-  <Target Name="IncludeFFmpegRuntimeFiles"
-          BeforeTargets="GetCopyToOutputDirectoryItems;ClCompile"
-          DependsOnTargets="VcpkgInstallManifestDependencies">
+  <Target Name="CompileWinUIXaml" BeforeTargets="ClCompile" DependsOnTargets="ResolveAssemblyReferences;ResolveKeySource;MarkupCompilePass1;MarkupCompilePass2" />
+  <Target Name="IncludeFFmpegRuntimeFiles" BeforeTargets="GetCopyToOutputDirectoryItems;ClCompile" DependsOnTargets="VcpkgInstallManifestDependencies">
     <ItemGroup>
       <FFmpegRuntimeDll Include="$(FFmpegInstalledDir)\bin\avcodec-*.dll;$(FFmpegInstalledDir)\bin\avfilter-*.dll;$(FFmpegInstalledDir)\bin\avformat-*.dll;$(FFmpegInstalledDir)\bin\avutil-*.dll;$(FFmpegInstalledDir)\bin\swresample-*.dll;$(FFmpegInstalledDir)\bin\swscale-*.dll" />
       <Content Include="@(FFmpegRuntimeDll)">
@@ -136,22 +133,15 @@
         <Link>%(Filename)%(Extension)</Link>
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </Content>
-      <Content Include="$(FFmpegInstalledDir)\share\ffmpeg\copyright"
-               Condition="Exists('$(FFmpegInstalledDir)\share\ffmpeg\copyright')">
+      <Content Include="$(FFmpegInstalledDir)\share\ffmpeg\copyright" Condition="Exists('$(FFmpegInstalledDir)\share\ffmpeg\copyright')">
         <TargetPath>licenses\FFmpeg-LICENSE.txt</TargetPath>
         <Link>licenses\FFmpeg-LICENSE.txt</Link>
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </Content>
     </ItemGroup>
     <MakeDir Directories="$(OutDir);$(OutDir)licenses" />
-    <Copy SourceFiles="@(FFmpegRuntimeDll)"
-          DestinationFolder="$(OutDir)"
-          SkipUnchangedFiles="true"
-          Condition="Exists('$(FFmpegInstalledDir)\bin')" />
-    <Copy SourceFiles="$(FFmpegInstalledDir)\share\ffmpeg\copyright"
-          DestinationFiles="$(OutDir)licenses\FFmpeg-LICENSE.txt"
-          SkipUnchangedFiles="true"
-          Condition="Exists('$(FFmpegInstalledDir)\share\ffmpeg\copyright')" />
+    <Copy SourceFiles="@(FFmpegRuntimeDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('$(FFmpegInstalledDir)\bin')" />
+    <Copy SourceFiles="$(FFmpegInstalledDir)\share\ffmpeg\copyright" DestinationFiles="$(OutDir)licenses\FFmpeg-LICENSE.txt" SkipUnchangedFiles="true" Condition="Exists('$(FFmpegInstalledDir)\share\ffmpeg\copyright')" />
   </Target>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>

@@ -22,8 +22,10 @@
     <ProjectName>RoadTripMovie.Package</ProjectName>
     <RootNamespace>RoadTripMovie.Package</RootNamespace>
     <DefaultLanguage>en-US</DefaultLanguage>
-    <AppxPackage>true</AppxPackage>
-    <AppxBundle>Always</AppxBundle>
+	<EnableMsixTooling>true</EnableMsixTooling>
+	<AppxPackage>true</AppxPackage>
+	<UseWinUI>true</UseWinUI>
+	<AppxBundle>Always</AppxBundle>
     <AppxBundlePlatforms>x64</AppxBundlePlatforms>
     <AppxPackageDir>$(SolutionDir)artifacts\</AppxPackageDir>
     <EntryPointProjectUniqueName>..\RoadTripMovie\RoadTripMovie.vcxproj</EntryPointProjectUniqueName>

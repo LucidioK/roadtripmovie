@@ -129,13 +129,31 @@ namespace RoadTripMovie
         statusText.TextWrapping(TextWrapping::Wrap);
         form.Children().Append(statusText);
 
+        StackPanel footer;
+        footer.Orientation(Orientation::Horizontal);
+        footer.VerticalAlignment(VerticalAlignment::Center);
+		footer.HorizontalAlignment(HorizontalAlignment::Center);
+        footer.Spacing(128);
+        HyperlinkButton authorLink;
+        authorLink.Content(box_value(L"By Lucidio Kuhn"));
+        authorLink.NavigateUri(winrt::Windows::Foundation::Uri(
+            L"https://github.com/LucidioK/index#about-me"));
+        HyperlinkButton projectLink;
+        projectLink.Content(box_value(L"Project README"));
+        projectLink.NavigateUri(winrt::Windows::Foundation::Uri(
+            L"https://github.com/LucidioK/roadtripmovie/blob/master/native/README.md"));
+		projectLink.HorizontalAlignment(HorizontalAlignment::Right);
+        footer.Children().Append(authorLink);
+        footer.Children().Append(projectLink);
+        form.Children().Append(footer);
+
         Border content;
         content.Padding(Thickness{ 24, 24, 24, 24 });
         content.Child(form);
         ScrollViewer scroll;
         scroll.Content(content);
         window.Content(scroll);
-        window.AppWindow().Resize(Windows::Graphics::SizeInt32{ 550, 700 });
+        window.AppWindow().Resize(Windows::Graphics::SizeInt32{ 550, 780 });
     }
 
     void MainWindow::AddTitleAndIntroduction(winrt::Microsoft::UI::Xaml::Controls::StackPanel& form)
